@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "keybird"
+version = "1.0.0"
+description = "Turn a Raspberry Pi into a USB HID keyboard/mouse bridge with web-based control"
+readme = "README.md"
+requires-python = ">=3.7"
+license = "MIT"
+authors = [
+    {name = "Ian McCutcheon", email = "ian@mcyork.com"}
+]
+keywords = ["raspberry-pi", "hid", "usb-gadget", "keyboard", "mouse", "kvm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: System :: Hardware",
+    "Topic :: System :: Networking",
+]
+
+dependencies = [
+    "flask>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=22.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mcyork/keybird"
+Repository = "https://github.com/mcyork/keybird"
+Issues = "https://github.com/mcyork/keybird/issues"
+
+[project.scripts]
+keybird-server = "keybird.server:main"
+keybird-setup = "keybird.setup:main"
+keybird-uninstall = "keybird.uninstall:main"
+keybird-deploy = "keybird.deploy_cli:main"
+
+[tool.setuptools]
+packages = ["keybird"]
+
+[tool.setuptools.package-data]
+keybird = [
+    "templates/*.html",
+    "static/css/*.css",
+    "static/js/*.js",
+    "scripts/*.sh",
+    "scripts/*.conf",
+    "systemd/*.service",
+]
+

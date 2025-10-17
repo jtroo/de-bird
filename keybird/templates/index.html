@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pi Keyboard Bridge</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg bg-body-tertiary">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">
+      <i class="bi bi-keyboard"></i> Pi USB Keyboard Bridge
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#main-nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="main-nav">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item">
+          <a class="nav-link" href="#" id="reboot_pi"><i class="bi bi-power"></i> Reboot</a>
+        </li>
+      </ul>
+      <div class="d-flex gap-3">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" role="switch" id="passthrough_toggle">
+          <label class="form-check-label" for="passthrough_toggle">Keyboard Passthrough</label>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" role="switch" id="mouse_passthrough_toggle">
+          <label class="form-check-label" for="mouse_passthrough_toggle">Mouse Passthrough</label>
+        </div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid mt-3">
+
+  <div class="row">
+    <div class="col-lg-6">
+      <div class="card status-card mb-3">
+        <div class="card-body">
+          <h5 class="card-title">Status</h5>
+          <p class="card-text">
+            <span class="status-item"><strong>USB:</strong> <span id="usb_status" class="badge bg-secondary">Checking...</span></span>
+            <span class="status-item"><strong>Emulating:</strong> <span id="emulating_info" class="badge bg-secondary">Loading...</span></span>
+          </p>
+          <div id="warning_box" class="alert alert-warning" style="display: none;">
+            <strong><i class="bi bi-exclamation-triangle-fill"></i> No USB Host Connected</strong><br>
+            Please connect a USB-C cable from this Pi's <strong>USB-C port</strong> to another computer's USB port.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Tab Navigation -->
+  <ul class="nav nav-tabs" id="main-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="control-tab-button" data-bs-toggle="tab" data-bs-target="#control-tab-pane" type="button" role="tab">Control</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="learning-tab-button" data-bs-toggle="tab" data-bs-target="#learning-tab-pane" type="button" role="tab">Learning</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="mappings-tab-button" data-bs-toggle="tab" data-bs-target="#mappings-tab-pane" type="button" role="tab">Mappings</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="settings-tab-button" data-bs-toggle="tab" data-bs-target="#settings-tab-pane" type="button" role="tab">Settings</button>
+    </li>
+  </ul>
+
+  <!-- Tab Content -->
+  <div class="tab-content" id="main-tabs-content">
+    
+    <!-- TAB 1: CONTROL (Default) -->
+    <div class="tab-pane fade show active" id="control-tab-pane" role="tabpanel">
+      <div class="row mt-3">
+        <div class="col-lg-6">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title"><i class="bi bi-textarea-t"></i> Send Text as Keystrokes</h5>
+              <p class="card-text">Type your text below and click "Send" to transmit it as HID keystrokes to the connected computer.</p>
+              <textarea id="bulk" class="form-control" rows="5" placeholder="Type your text here..."></textarea>
+              <div class="d-flex gap-2 mt-2">
+                <button id="bulk_send" class="btn btn-primary"><i class="bi bi-send"></i> Send to Keyboard</button>
+                <button id="check_status" class="btn btn-secondary"><i class="bi bi-arrow-repeat"></i> Check USB Status</button>
+              </div>
+              <div id="status" class="form-text mt-2"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title"><i class="bi bi-mouse"></i> Trackpad Control</h5>
+              <p class="card-text">Use the area below like a laptop trackpad. Move, click, right-click, and scroll.</p>
+              
+              <div id="trackpad" class="trackpad-area">
+                <div id="cursor_dot"></div>
+                <div class="trackpad-overlay">
+                  <div class="trackpad-icon">🖱️</div>
+                  <div class="trackpad-text">Move • Click • Right-Click • Scroll</div>
+                </div>
+              </div>
+              
+              <div class="row mt-3">
+                <div class="col-md-6">
+                  <label for="mouse_sensitivity" class="form-label">Sensitivity</label>
+                  <input type="range" class="form-range" id="mouse_sensitivity" min="0.1" max="3" step="0.1" value="1">
+                  <span id="sensitivity_value" class="badge bg-primary">1.0x</span>
+                </div>
+                <div class="col-md-6">
+                  <label for="calibration_selector" class="form-label">Calibration Profile</label>
+                  <div class="input-group">
+                    <select id="calibration_selector" class="form-select">
+                      <option value="">None (Manual)</option>
+                    </select>
+                    <button id="calibrate_trackpad" class="btn btn-warning"><i class="bi bi-bullseye"></i></button>
+                  </div>
+                </div>
+              </div>
+
+              <details class="mt-3">
+                <summary>Alternative Click Buttons</summary>
+                <div class="d-flex gap-2 mt-2">
+                  <button id="mouse_left" class="btn btn-outline-primary">Left Click</button>
+                  <button id="mouse_middle" class="btn btn-outline-secondary">Middle Click</button>
+                  <button id="mouse_right" class="btn btn-outline-success">Right Click</button>
+                </div>
+              </details>
+              
+              <div id="mouse_status" class="form-text mt-2">Ready - Move mouse in trackpad area above</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: LEARNING -->
+    <div class="tab-pane fade" id="learning-tab-pane" role="tabpanel">
+      <div class="card mt-3">
+        <div class="card-body">
+          <h5 class="card-title"><i class="bi bi-mortarboard"></i> Learning Mode - Map Unknown Keys</h5>
+          <p class="card-text">When pass-through is enabled, unmapped keys appear here. <strong>Click any key to map it.</strong></p>
+          
+          <div id="unmapped_keys_list" class="list-group unmapped-keys-container">
+            <div class="list-group-item">No unmapped keys yet. Enable pass-through and press unknown keys.</div>
+          </div>
+          
+          <div class="d-flex gap-2 mt-3">
+            <button id="refresh_unmapped" class="btn btn-info"><i class="bi bi-arrow-repeat"></i> Refresh</button>
+            <button id="clear_unmapped" class="btn btn-secondary"><i class="bi bi-trash"></i> Clear List</button>
+            <button id="export_mappings" class="btn btn-success"><i class="bi bi-download"></i> Export All Mappings</button>
+            <button id="toggle_help" class="btn btn-outline-info" data-bs-toggle="collapse" data-bs-target="#hid_reference"><i class="bi bi-question-circle"></i> Toggle Help</button>
+          </div>
+
+          <div id="hid_reference" class="collapse mt-3">
+            <div class="card card-body bg-dark-subtle border-info">
+              <h5 class="text-info"><i class="bi bi-info-circle"></i> HID Code Quick Reference</h5>
+              <p>When you click an unmapped key, we auto-suggest the HID code if known. Just click OK!</p>
+              <p><strong>Common codes (if you need to enter manually):</strong></p>
+              <ul>
+                <li>Sleep/Power: <code class="text-warning">0x66</code></li>
+                <li>Application/Menu: <code class="text-warning">0x65</code></li>
+                <li>Non-US Backslash: <code class="text-warning">0x64</code></li>
+                <li>For other keys: <a href="https://usb.org/sites/default/files/hut1_4.pdf" target="_blank" class="text-info">USB HID Usage Tables (PDF)</a> - see page 83+</li>
+              </ul>
+              <p><strong>Media keys</strong> (volume, mute) work automatically if composite gadget is active!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: MAPPINGS -->
+    <div class="tab-pane fade" id="mappings-tab-pane" role="tabpanel">
+      <div class="card mt-3">
+        <div class="card-body">
+          <h5 class="card-title"><i class="bi bi-joystick"></i> Manage Keyboard Mappings</h5>
+          <p class="card-text">Select a keyboard to view/edit its custom key mappings. Perfect for suppressing YubiKey Enter keys!</p>
+          
+          <div class="input-group mb-3">
+            <label class="input-group-text" for="manage_kbd_selector">Select Keyboard:</label>
+            <select id="manage_kbd_selector" class="form-select">
+              <option value="">Loading keyboards...</option>
+            </select>
+            <button id="refresh_keyboards_list" class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i></button>
+          </div>
+          
+          <div id="selected_kbd_info" class="alert alert-info" style="display: none;">
+            <strong id="selected_kbd_name"></strong>
+            <span id="selected_kbd_status"></span>
+            <br>
+            <small>Mapping count: <span id="selected_kbd_count">0</span></small>
+          </div>
+
+          <div id="mappings_table_container" style="display: none;">
+            <h6>Current Mappings</h6>
+            <table id="mappings_table" class="table table-bordered table-striped">
+              <thead>
+                <tr>
+                  <th>Key Name</th>
+                  <th>Code</th>
+                  <th>Action</th>
+                  <th>Delete</th>
+                </tr>
+              </thead>
+              <tbody id="mappings_tbody">
+                <tr><td colspan="4" class="text-center">No mappings yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="add_mapping_container" class="card card-body mt-3" style="display: none;">
+            <h6>Add New Mapping</h6>
+            <form id="add_mapping_form">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label for="new_key_code" class="form-label">Key Code:</label>
+                  <input type="number" id="new_key_code" class="form-control" placeholder="e.g., 28 for Enter" required>
+                  <div class="form-text">Hint: Enable pass-through and press the key to see its code</div>
+                </div>
+                <div class="col-md-6">
+                  <label for="new_mapping_type" class="form-label">Action Type:</label>
+                  <select id="new_mapping_type" class="form-select">
+                    <option value="suppress">🚫 Suppress (ignore key)</option>
+                    <option value="hid">→ Map to HID code</option>
+                    <option value="text">→ Send text</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row g-3 mt-1">
+                <div id="hid_code_input" class="col-md-6">
+                  <label for="new_hid_code" class="form-label">HID Code (hex):</label>
+                  <input type="text" id="new_hid_code" class="form-control" placeholder="e.g., 0x28">
+                </div>
+                <div id="text_input" class="col-md-6" style="display: none;">
+                  <label for="new_text" class="form-label">Text to send:</label>
+                  <input type="text" id="new_text" class="form-control" placeholder="e.g., mypassword">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-success mt-3"><i class="bi bi-plus-circle"></i> Add Mapping</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: SETTINGS -->
+    <div class="tab-pane fade" id="settings-tab-pane" role="tabpanel">
+      <div class="row mt-3">
+        <div class="col-lg-6">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title"><i class="bi bi-gear-wide-connected"></i> Emulation Profile</h5>
+              <p class="card-text"><strong>What Windows Sees:</strong> Select which keyboard device to emulate.</p>
+              
+              <div class="input-group">
+                <select id="profile_selector" class="form-select">
+                  <option value="">Loading profiles...</option>
+                </select>
+                <button id="switch_profile" class="btn btn-success">Switch & Reboot</button>
+              </div>
+              <div class="d-flex gap-2 mt-2">
+                <button id="export_profiles" class="btn btn-info"><i class="bi bi-download"></i> Export Profiles</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><i class="bi bi-usb-symbol"></i> Detected Physical Keyboards</h5>
+                <button id="refresh_keyboards" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i></button>
+              </div>
+              <div id="detected_keyboards" class="list-group mt-3">
+                <div class="list-group-item">Loading...</div>
+              </div>
+              <div class="form-text mt-2">
+                💡 <strong>Note:</strong> Some keyboards (like Dell WK636) use dongles from other manufacturers (Logitech). 
+                The VID:PID shows the actual hardware chip, which is what Windows sees.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Calibration Overlay -->
+<div id="calibration_overlay" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">🎯 Trackpad Calibration</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" id="cancel_calibration"></button>
+      </div>
+      <div class="modal-body text-center">
+        <p class="lead">Step <span id="cal_step">1</span> of 4</p>
+        <p id="cal_instruction" class="instruction-text">Using your PHYSICAL MOUSE, move to the TOP-LEFT corner of your screen and click.</p>
+        <div class="d-flex justify-content-center gap-3 my-4">
+          <div id="cal_point_0" class="cal-point">1</div>
+          <div id="cal_point_1" class="cal-point">2</div>
+          <div id="cal_point_2" class="cal-point">3</div>
+          <div id="cal_point_3" class="cal-point">4</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

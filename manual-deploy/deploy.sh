@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# Pi HID Bridge Deployment Script v2.1
+# Usage: ./deploy.sh <pi-name>
+# Example: ./deploy.sh keybird
+#
+# Prerequisites:
+#   pip install pi-shell
+#   pi-shell add keybird --host 192.168.1.50 --user pi --password raspberry --push-key
+#
+# This script uses symlinks created by pi-shell (e.g., 'keybird', 'mypi')
+# See: https://github.com/mcyork/pi-shell
+
+set -e
+
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <pi-name>"
+    echo "Example: $0 keybird"
+    echo ""
+    echo "Prerequisites:"
+    echo "  pip install pi-shell"
+    echo "  pi-shell add <name> --host <ip> --user pi --password <pass> --push-key"
+    echo ""
+    echo "Available Pis:"
+    pi-shell status 2>/dev/null || echo "  (pi-shell not installed or no Pis configured)"
+    exit 1
+fi
+
+PI_NAME=$1
+REMOTE_PATH="/home/pi/pi-hid-bridge"
+
+echo "🚀 Deploying Pi HID Bridge v2.0 to $PI_NAME..."
+echo ""
+
+# Check if Pi is online
+echo "📡 Checking if $PI_NAME is online..."
+if ! $PI_NAME run "echo 'Connected'" > /dev/null 2>&1; then
+    echo "❌ Error: Cannot connect to $PI_NAME"
+    echo "   Check that the Pi is online with: pi-shell status $PI_NAME"
+    echo "   Or verify Pi Shell is installed: pip install pi-shell"
+    exit 1
+fi
+
+# Get Pi model and IP
+echo "🔍 Detecting Pi model..."
+PI_MODEL=$($PI_NAME run-stream "cat /proc/device-tree/model 2>/dev/null || echo 'Unknown'")
+PI_IP=$($PI_NAME run-stream "hostname -I | awk '{print \$1}'")
+echo "   Model: $PI_MODEL"
+echo "   IP: $PI_IP"
+echo ""
+
+# Check if Pi 5
+if [[ "$PI_MODEL" == *"Pi 5"* ]] || [[ "$PI_MODEL" == *"Raspberry Pi 5"* ]]; then
+    echo "⚠️  WARNING: Raspberry Pi 5 detected!"
+    echo "   USB gadget mode is currently non-functional on Pi 5."
+    echo "   This deployment will complete, but USB output won't work."
+    echo "   Recommend using Pi 4, Pi Zero 2 W models."
+    echo ""
+    read -p "   Continue anyway? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+
+# Create directory structure
+echo "📁 Creating directory structure..."
+$PI_NAME run-stream "mkdir -p $REMOTE_PATH/{app,scripts,systemd,templates,static/css,static/js}"
+
+# Upload application files
+echo "📤 Uploading application files..."
+$PI_NAME send requirements.txt $REMOTE_PATH/requirements.txt
+$PI_NAME send app/pi_kb.py $REMOTE_PATH/app/pi_kb.py
+
+# Upload web UI files
+echo "📤 Uploading web UI templates and static files..."
+$PI_NAME send templates/index.html $REMOTE_PATH/templates/index.html
+$PI_NAME send static/css/style.css $REMOTE_PATH/static/css/style.css
+$PI_NAME send static/js/app.js $REMOTE_PATH/static/js/app.js
+
+# Upload scripts
+echo "📤 Uploading scripts..."
+$PI_NAME send scripts/setup_gadget_composite.sh $REMOTE_PATH/scripts/setup_gadget_composite.sh
+$PI_NAME send scripts/cleanup_gadget.sh $REMOTE_PATH/scripts/cleanup_gadget.sh
+$PI_NAME send scripts/gadget.conf $REMOTE_PATH/scripts/gadget.conf
+
+# Upload systemd services
+echo "📤 Uploading systemd services..."
+$PI_NAME send systemd/hid-gadget.service $REMOTE_PATH/systemd/hid-gadget.service
+$PI_NAME send systemd/pi-hid-bridge.service $REMOTE_PATH/systemd/pi-hid-bridge.service
+
+# Make scripts executable
+echo "🔧 Setting permissions..."
+$PI_NAME run-stream "chmod +x $REMOTE_PATH/scripts/*.sh"
+
+# Install dependencies
+echo "📦 Installing Python dependencies..."
+$PI_NAME run-stream "sudo pip3 install -r $REMOTE_PATH/requirements.txt --break-system-packages 2>&1 | grep -v 'Requirement already satisfied' || true"
+
+# Configure boot config for USB gadget mode
+echo "⚙️  Configuring USB gadget mode in boot config..."
+$PI_NAME run-stream "sudo cp /boot/firmware/config.txt /boot/firmware/config.txt.backup 2>/dev/null || sudo cp /boot/config.txt /boot/config.txt.backup || true"
+
+# Check if dwc2 overlay already exists
+if $PI_NAME run-stream "grep -q 'dtoverlay=dwc2' /boot/firmware/config.txt 2>/dev/null || grep -q 'dtoverlay=dwc2' /boot/config.txt 2>/dev/null"; then
+    echo "   ✓ dwc2 overlay already configured"
+else
+    echo "   Adding dwc2 overlay to config.txt..."
+    $PI_NAME run-stream "echo 'dtoverlay=dwc2,dr_mode=peripheral' | sudo tee -a /boot/firmware/config.txt >/dev/null 2>&1 || echo 'dtoverlay=dwc2,dr_mode=peripheral' | sudo tee -a /boot/config.txt >/dev/null"
+fi
+
+# Check if modules-load already in cmdline
+if $PI_NAME run-stream "grep -q 'modules-load=dwc2' /boot/firmware/cmdline.txt 2>/dev/null || grep -q 'modules-load=dwc2' /boot/cmdline.txt 2>/dev/null"; then
+    echo "   ✓ modules-load already configured"
+else
+    echo "   Adding modules-load to cmdline.txt..."
+    $PI_NAME run-stream "sudo sed -i 's/rootwait/rootwait modules-load=dwc2,g_hid/' /boot/firmware/cmdline.txt 2>/dev/null || sudo sed -i 's/rootwait/rootwait modules-load=dwc2,g_hid/' /boot/cmdline.txt"
+fi
+
+# Install systemd services
+echo "🔧 Installing systemd services..."
+$PI_NAME run-stream "sudo cp $REMOTE_PATH/systemd/hid-gadget.service /etc/systemd/system/"
+$PI_NAME run-stream "sudo cp $REMOTE_PATH/systemd/pi-hid-bridge.service /etc/systemd/system/"
+$PI_NAME run-stream "sudo systemctl daemon-reload"
+$PI_NAME run-stream "sudo systemctl enable hid-gadget.service"
+$PI_NAME run-stream "sudo systemctl enable pi-hid-bridge.service"
+
+echo ""
+echo "✅ Deployment complete!"
+echo ""
+echo "📋 What was deployed:"
+echo "   ✅ Composite HID gadget (Keyboard + Media Keys + Mouse)"
+echo "   ✅ Flask web app with all v2.0 features:"
+echo "      - Multi-keyboard pass-through"
+echo "      - Multi-mouse pass-through"
+echo "      - Emulation profile switching"
+echo "      - Per-keyboard custom mappings"
+echo "      - Key suppression (YubiKey support)"
+echo "      - Web trackpad with calibration"
+echo "      - Learning mode & mapping management"
+echo "   ✅ Systemd auto-start services"
+echo "   ✅ Boot configuration for USB gadget mode"
+echo ""
+echo "📋 Next steps:"
+echo "   1. Reboot the Pi:"
+echo "      $PI_NAME run-stream 'sudo reboot'"
+echo ""
+echo "   2. Wait ~30-45 seconds for reboot"
+echo ""
+echo "   3. Services will auto-start! Check status:"
+echo "      $PI_NAME run-stream 'sudo systemctl status hid-gadget.service'"
+echo "      $PI_NAME run-stream 'sudo systemctl status pi-hid-bridge.service'"
+echo ""
+echo "   4. Connect USB-C cable:"
+echo "      Pi USB-C port → Target computer USB port"
+echo ""
+echo "   5. Open web UI:"
+echo "      http://$PI_IP:8080"
+echo ""
+echo "💡 Features available:"
+echo "   - Section 1: Keyboard pass-through (auto-enabled)"
+echo "   - Section 2: Mouse pass-through"
+echo "   - Section 3: Learning mode (map unknown keys)"
+echo "   - Section 4: Web trackpad + calibration"
+echo "   - Section 5: Keyboard mappings management"
+echo "   - Section 6: Send bulk text"
+echo ""
+echo "🔧 Troubleshooting:"
+echo "   - Check USB: $PI_NAME run-stream 'cat /sys/class/udc/*/state'"
+echo "   - View logs: $PI_NAME run-stream 'sudo journalctl -u pi-hid-bridge.service -f'"
+echo "   - List HID devices: $PI_NAME run-stream 'ls -la /dev/hidg*'"
+echo ""

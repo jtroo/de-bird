@@ -1,0 +1,17 @@
+[Unit]
+Description=Pi HID Bridge Web App
+After=network-online.target hid-gadget.service
+Wants=network-online.target
+Requires=hid-gadget.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/pi-hid-bridge
+ExecStart=/usr/bin/python3 /home/pi/pi-hid-bridge/pi_kb.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+

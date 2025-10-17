@@ -1,0 +1,17 @@
+# Include essential documentation
+include README.md
+include LICENSE
+include docs/UNINSTALL.md
+
+# Include package data
+recursive-include keybird/templates *.html
+recursive-include keybird/static *.css *.js
+recursive-include keybird/scripts *.sh *.conf
+recursive-include keybird/systemd *.service
+
+# Exclude development files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude *.bak
+

@@ -1,0 +1,15 @@
+[Unit]
+Description=USB HID Composite Gadget (Keyboard + Media Keys)
+After=network.target sys-kernel-config.mount local-fs.target
+DefaultDependencies=no
+Before=pi-hid-bridge.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash /home/pi/pi-hid-bridge/scripts/setup_gadget_composite.sh
+ExecStop=/bin/bash /home/pi/pi-hid-bridge/scripts/cleanup_gadget.sh
+
+[Install]
+WantedBy=multi-user.target
+
