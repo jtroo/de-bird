@@ -2,7 +2,7 @@
 
 **Transform your Raspberry Pi into a professional USB keyboard, mouse, and media controller with web-based management.**
 
-Control a computer from another computer, customize per-keyboard mappings, suppress keys or functions that auto-enter, and manage everything through a modern Bootstrap 5 dark theme web interface.
+Control a computer from another computer, customize per-keyboard mappings, suppress keys or functions that auto-enter, and manage everything through a modern Bootstrap 5 dark theme web interface. But why does this exist [BHB.bzz]https://bhb.buzz/keybird.html
 
 **🔗 GitHub:** [github.com/mcyork/keybird](https://github.com/mcyork/keybird)
 
