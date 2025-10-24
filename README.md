@@ -785,9 +785,7 @@ cd keybird/manual-deploy
 ## 🚀 Version History
 
 - **v1.0.1** (Oct 2025) - **Bug fix**: Fixed silent crash in keyboard pass-through mode
-- **v2.1** (Oct 2025) - Mouse control, trackpad calibration, multi-mouse support
-- **v2.0** (Oct 2025) - Multi-keyboard, profiles, per-keyboard mappings, YubiKey support
-- **v1.0** (Oct 2025) - Basic keyboard pass-through and web UI
+- **v1.0** (Oct 2025) - Initial release with keyboard pass-through, web UI, mouse control, trackpad calibration, multi-keyboard support, profiles, per-keyboard mappings, and YubiKey support
 - **v0.1** (Oct 2025) - Initial prototype
 
 ---
