@@ -1,4 +1,4 @@
-# Pi HID Bridge v2.1
+# Keybird v1.0.1
 
 **Transform your Raspberry Pi into a professional USB keyboard, mouse, and media controller with web-based management.**
 
@@ -784,6 +784,7 @@ cd keybird/manual-deploy
 
 ## 🚀 Version History
 
+- **v1.0.1** (Oct 2025) - **Bug fix**: Fixed silent crash in keyboard pass-through mode
 - **v2.1** (Oct 2025) - Mouse control, trackpad calibration, multi-mouse support
 - **v2.0** (Oct 2025) - Multi-keyboard, profiles, per-keyboard mappings, YubiKey support
 - **v1.0** (Oct 2025) - Basic keyboard pass-through and web UI

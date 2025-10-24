@@ -6,6 +6,7 @@ import os
 import threading
 import select
 import json
+import fcntl
 from collections import deque
 from flask import Flask, request, render_template, jsonify
 
@@ -501,6 +502,14 @@ if EVDEV_AVAILABLE:
                         }
                         save_keyboard_mappings(keyboard_mappings)
                     
+                    # Set non-blocking mode to prevent BlockingIOError
+                    try:
+                        flags = fcntl.fcntl(cand.fd, fcntl.F_GETFL)
+                        fcntl.fcntl(cand.fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+                    except Exception as fcntl_error:
+                        print(f"⚠️  Failed to set non-blocking mode for {path}: {fcntl_error}", flush=True)
+                        continue
+                    
                     keyboards.append(cand)
                     keyboard_map[cand.fd] = (cand, kbd_id)
                     print(f"🎹 Pass-through monitoring: {cand.name} ({path})", flush=True)
@@ -532,15 +541,16 @@ if EVDEV_AVAILABLE:
                         dev, kbd_id = keyboard_map[fd]
                         active_physical_keyboard_id = kbd_id  # Update active keyboard
                         
-                        for ev in dev.read():
-                            if not PASSTHROUGH_ENABLED:
-                                break
-                            if ev.type != ecodes.EV_KEY:
-                                continue
-                            
-                            kev = categorize(ev)
-                            code = kev.scancode
-                            val = kev.keystate  # 0=up,1=down,2=hold
+                        try:
+                            for ev in dev.read():
+                                if not PASSTHROUGH_ENABLED:
+                                    break
+                                if ev.type != ecodes.EV_KEY:
+                                    continue
+                                
+                                kev = categorize(ev)
+                                code = kev.scancode
+                                val = kev.keystate  # 0=up,1=down,2=hold
                             
                             # Handle modifier keys
                             if code in MOD_KEYS:
@@ -622,10 +632,17 @@ if EVDEV_AVAILABLE:
                             
                             hid.write(ks.report())
                             hid.flush()
+                        except BlockingIOError:
+                            # No data available - this is normal with non-blocking mode
+                            pass
+                        except Exception as read_error:
+                            print(f"⚠️  Error reading from keyboard {dev.name}: {read_error}", flush=True)
         except Exception as e:
-            print(f"❌ Pass-through error: {e}")
+            print(f"❌ Pass-through error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
         finally:
-            print("⏹️  Pass-through mode STOPPED")
+            print("⏹️  Pass-through mode STOPPED", flush=True)
 
     # Mouse pass-through function
     def mouse_pass_through_loop():
