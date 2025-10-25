@@ -19,6 +19,9 @@
   cursor: none;
   position: relative;
   user-select: none;
+  touch-action: none; /* Prevent default touch behaviors */
+  -webkit-touch-callout: none; /* Prevent iOS callout menu */
+  -webkit-user-select: none; /* Prevent text selection on iOS */
 }
 
 #cursor_dot {
@@ -50,6 +53,24 @@
 .trackpad-text {
   font-size: 1.25rem;
   font-weight: bold;
+}
+
+/* Touch-specific styles for mobile devices */
+@media (hover: none) and (pointer: coarse) {
+  .trackpad-area {
+    height: 350px; /* Larger touch target on mobile */
+  }
+  
+  .trackpad-text {
+    font-size: 1rem;
+  }
+  
+  .trackpad-text::after {
+    content: " • Touch to move cursor";
+    color: #6c757d;
+    font-size: 0.9rem;
+    font-weight: normal;
+  }
 }
 
 .unmapped-keys-container {

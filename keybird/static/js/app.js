@@ -648,6 +648,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const sensitivityValue = document.getElementById("sensitivity_value");
 
   let lastMouseX = 0, lastMouseY = 0, isMouseInTrackpad = false;
+  let lastTouchX = 0, lastTouchY = 0, isTouchActive = false;
   let mouseSensitivity = 1.0;
 
   sensitivitySlider.oninput = (e) => {
@@ -713,4 +714,104 @@ document.addEventListener('DOMContentLoaded', function() {
       try { await fetch("/mouse_move", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({wheel}) }); } catch (e) { console.error(e); }
     }
   };
+
+  // ===== TOUCH SUPPORT FOR MOBILE DEVICES =====
+  trackpad.addEventListener('touchstart', (e) => {
+    e.preventDefault(); // Prevent scrolling and zooming
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const rect = trackpad.getBoundingClientRect();
+      lastTouchX = touch.clientX;
+      lastTouchY = touch.clientY;
+      isTouchActive = true;
+      
+      // Show cursor dot at touch position
+      cursorDot.style.display = 'block';
+      cursorDot.style.left = (touch.clientX - rect.left - 6) + 'px';
+      cursorDot.style.top = (touch.clientY - rect.top - 6) + 'px';
+      mouseStatus.textContent = "🟢 Touch trackpad active";
+    }
+  }, { passive: false });
+
+  trackpad.addEventListener('touchmove', async (e) => {
+    e.preventDefault(); // Prevent scrolling
+    if (e.touches.length === 1 && isTouchActive) {
+      const touch = e.touches[0];
+      const rect = trackpad.getBoundingClientRect();
+      
+      // Update cursor dot position
+      cursorDot.style.left = (touch.clientX - rect.left - 6) + 'px';
+      cursorDot.style.top = (touch.clientY - rect.top - 6) + 'px';
+      
+      // Calculate movement delta
+      const dx = Math.round((touch.clientX - lastTouchX) * mouseSensitivity);
+      const dy = Math.round((touch.clientY - lastTouchY) * mouseSensitivity);
+      
+      lastTouchX = touch.clientX;
+      lastTouchY = touch.clientY;
+      
+      // Send mouse movement
+      if (dx !== 0 || dy !== 0) {
+        try { 
+          await fetch("/mouse_move", { 
+            method: "POST", 
+            headers: {"Content-Type": "application/json"}, 
+            body: JSON.stringify({dx, dy}) 
+          }); 
+        } catch (err) { 
+          console.error("Touch move error:", err); 
+        }
+      }
+    }
+  }, { passive: false });
+
+  trackpad.addEventListener('touchend', async (e) => {
+    e.preventDefault();
+    if (isTouchActive) {
+      isTouchActive = false;
+      cursorDot.style.display = 'none';
+      mouseStatus.textContent = "Ready - Touch trackpad area above";
+      
+      // Send left click on touch end (tap to click)
+      try {
+        await fetch("/mouse_click", { 
+          method: "POST", 
+          headers: {"Content-Type": "application/json"}, 
+          body: JSON.stringify({button: 'left'}) 
+        });
+        mouseStatus.textContent = "✅ Touch click sent";
+        setTimeout(() => { 
+          mouseStatus.textContent = "Ready - Touch trackpad area above"; 
+        }, 1000);
+      } catch (err) {
+        console.error("Touch click error:", err);
+      }
+    }
+  }, { passive: false });
+
+  // Handle multi-touch gestures for right-click and scroll
+  trackpad.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      // Two-finger touch - could be used for right-click or scroll
+      // For now, we'll use it for right-click
+      setTimeout(async () => {
+        if (e.touches.length === 2) {
+          try {
+            await fetch("/mouse_click", { 
+              method: "POST", 
+              headers: {"Content-Type": "application/json"}, 
+              body: JSON.stringify({button: 'right'}) 
+            });
+            mouseStatus.textContent = "✅ Two-finger right-click sent";
+            setTimeout(() => { 
+              mouseStatus.textContent = "Ready - Touch trackpad area above"; 
+            }, 1000);
+          } catch (err) {
+            console.error("Two-finger click error:", err);
+          }
+        }
+      }, 200); // Small delay to distinguish from single touch
+    }
+  }, { passive: false });
 });
