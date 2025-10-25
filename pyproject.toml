@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "keybird"
-version = "1.0.1"
+version = "1.0.2"
 description = "Turn a Raspberry Pi into a USB HID keyboard/mouse bridge with web-based control"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 license = "MIT"
 authors = [
     {name = "Ian McCutcheon", email = "ian@mcyork.com"}
@@ -19,11 +19,9 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: System :: Hardware",
     "Topic :: System :: Networking",
 ]

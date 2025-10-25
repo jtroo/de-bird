@@ -1,4 +1,4 @@
-# Keybird v1.0.1
+# Keybird v1.0.2
 
 **Transform your Raspberry Pi into a professional USB keyboard, mouse, and media controller with web-based management.**
 
@@ -784,6 +784,7 @@ cd keybird/manual-deploy
 
 ## 🚀 Version History
 
+- **v1.0.2** (Oct 2025) - **Modernization**: Updated to Python 3.10+, replaced deprecated pkg_resources with importlib.resources
 - **v1.0.1** (Oct 2025) - **Bug fix**: Fixed silent crash in keyboard pass-through mode
 - **v1.0** (Oct 2025) - Initial release with keyboard pass-through, web UI, mouse control, trackpad calibration, multi-keyboard support, profiles, per-keyboard mappings, and YubiKey support
 - **v0.1** (Oct 2025) - Initial prototype

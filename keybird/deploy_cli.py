@@ -7,7 +7,8 @@ import sys
 import subprocess
 import os
 import shutil
-import pkg_resources
+from importlib import resources
+from pathlib import Path
 
 
 def check_pi_shell():
@@ -28,7 +29,13 @@ def check_pi_exists(pi_name):
 def get_package_file(filename):
     """Get path to a file in the installed package"""
     try:
-        return pkg_resources.resource_filename('keybird', filename)
+        # Use importlib.resources for modern Python 3.10+
+        if hasattr(resources, 'files'):
+            # Python 3.9+ - use the modern API
+            return str(resources.files('keybird') / filename)
+        else:
+            # Fallback for older versions (though we require 3.10+)
+            return str(resources.path('keybird', filename))
     except Exception as e:
         print(f"❌ Error: Could not find package file '{filename}': {e}")
         sys.exit(1)
