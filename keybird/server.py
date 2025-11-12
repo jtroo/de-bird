@@ -96,6 +96,11 @@ def save_keyboard_mappings(data):
 keyboard_mappings = load_keyboard_mappings()
 active_physical_keyboard_id = None  # Will be set when pass-through starts
 
+# ===== KEY LISTENING MODE (for mapping) =====
+listening_keyboard_id = None  # Which keyboard we're listening to for mapping
+listening_lock = threading.Lock()  # Lock for listening state
+captured_key_buffer = deque(maxlen=10)  # Store captured keys for mapping
+
 # ===== TRACKPAD CALIBRATIONS =====
 def load_calibrations():
     """Load saved trackpad calibrations"""
@@ -483,6 +488,9 @@ if EVDEV_AVAILABLE:
         keyboards = []
         keyboard_map = {}  # Map fd -> (device, kbd_id)
         
+        # First pass: collect all keyboard devices and group by uniq ID
+        keyboard_devices = {}  # uniq -> list of (device, path, name)
+        
         event_paths = sorted(glob.glob("/dev/input/event*"))
         
         for path in event_paths:
@@ -491,23 +499,56 @@ if EVDEV_AVAILABLE:
                 caps = cand.capabilities().get(ecodes.EV_KEY, [])
                 # Look for keyboard (has A and Enter keys)
                 if ecodes.KEY_A in caps and ecodes.KEY_ENTER in caps:
-                    kbd_id = f"{cand.name}_{cand.uniq}" if cand.uniq else cand.name
-                    
-                    # Ensure this keyboard has an entry in mappings
-                    if kbd_id not in keyboard_mappings:
-                        keyboard_mappings[kbd_id] = {
-                            'keyboard_name': cand.name,
-                            'custom_mappings': {}
-                        }
-                        save_keyboard_mappings(keyboard_mappings)
-                    
-                    keyboards.append(cand)
-                    keyboard_map[cand.fd] = (cand, kbd_id)
-                    print(f"🎹 Pass-through monitoring: {cand.name} ({path})", flush=True)
-                    print(f"   Mappings: {len(keyboard_mappings[kbd_id]['custom_mappings'])}", flush=True)
+                    uniq_key = cand.uniq if cand.uniq else f"no_uniq_{cand.name}"
+                    if uniq_key not in keyboard_devices:
+                        keyboard_devices[uniq_key] = []
+                    keyboard_devices[uniq_key].append((cand, path, cand.name))
             except Exception as e:
                 print(f"⚠️  Skipped {path}: {e}", flush=True)
                 continue
+        
+        # Second pass: for each unique device, pick the best name and create unified kbd_id
+        for uniq_key, devices in keyboard_devices.items():
+            # Pick the "best" name (prefer shorter, or one without "Keyboard" suffix)
+            best_name = None
+            best_device = None
+            for device, path, name in devices:
+                if best_name is None:
+                    best_name = name
+                    best_device = device
+                elif len(name) < len(best_name):
+                    # Prefer shorter name
+                    best_name = name
+                    best_device = device
+                elif "Keyboard" not in name and "Keyboard" in best_name:
+                    # Prefer name without "Keyboard" suffix
+                    best_name = name
+                    best_device = device
+            
+            # Create unified keyboard ID
+            if uniq_key.startswith("no_uniq_"):
+                kbd_id = best_name
+            else:
+                kbd_id = f"{best_name}_{uniq_key}"
+            
+            # Ensure this keyboard has an entry in mappings
+            if kbd_id not in keyboard_mappings:
+                keyboard_mappings[kbd_id] = {
+                    'keyboard_name': best_name,
+                    'custom_mappings': {}
+                }
+                save_keyboard_mappings(keyboard_mappings)
+            
+            # Add all devices for this keyboard (monitor all interfaces)
+            for device, path, name in devices:
+                keyboards.append(device)
+                keyboard_map[device.fd] = (device, kbd_id)
+                if name != best_name:
+                    print(f"🎹 Pass-through monitoring: {name} ({path}) → merged with {best_name}", flush=True)
+                else:
+                    print(f"🎹 Pass-through monitoring: {name} ({path})", flush=True)
+            
+            print(f"   Mappings: {len(keyboard_mappings[kbd_id]['custom_mappings'])}", flush=True)
         if not keyboards:
             print("⚠️  No keyboards found for pass-through; waiting...")
             time.sleep(3)
@@ -542,6 +583,10 @@ if EVDEV_AVAILABLE:
                             code = kev.scancode
                             val = kev.keystate  # 0=up,1=down,2=hold
                             
+                            # Check if we're in listening mode for this keyboard
+                            with listening_lock:
+                                is_listening = (listening_keyboard_id == kbd_id)
+                            
                             # Handle modifier keys
                             if code in MOD_KEYS:
                                 bit = MOD_KEYS[code]
@@ -549,8 +594,37 @@ if EVDEV_AVAILABLE:
                                     ks.mod |= bit
                                 else:
                                     ks.mod &= ~bit
+                                
+                                # If listening, suppress modifier keys but still track state
+                                if is_listening:
+                                    # Still track modifier state for combinations, but don't send
+                                    continue
+                                
                                 hid.write(ks.report())
                                 hid.flush()
+                                continue
+                            
+                            # If listening mode is active for this keyboard, capture the key
+                            if is_listening and val == 1:  # Only capture on key down
+                                key_name = ecodes.KEY.get(code, f"KEY_{code}")
+                                mod_names = []
+                                if ks.mod & 1: mod_names.append('Ctrl')
+                                if ks.mod & 2: mod_names.append('Shift')
+                                if ks.mod & 4: mod_names.append('Alt')
+                                if ks.mod & 8: mod_names.append('Meta')
+                                mod_string = '+'.join(mod_names) if mod_names else ''
+                                full_name = f"{mod_string}+{key_name}" if mod_string else key_name
+                                
+                                with listening_lock:
+                                    captured_key_buffer.append({
+                                        'code': code,
+                                        'name': full_name,
+                                        'key_name': key_name,
+                                        'keyboard_id': kbd_id,
+                                        'modifiers': ks.mod,
+                                        'timestamp': time.time()
+                                    })
+                                # Don't pass through the key when capturing - suppress it
                                 continue
                             
                             # Check if it's a media key
@@ -587,9 +661,16 @@ if EVDEV_AVAILABLE:
                                             hid.write(ks.report())
                                             hid.flush()
                                     elif mapping.get('type') == 'text':
-                                        # User mapped to text string (send via separate function)
-                                        # For now, just log it
-                                        print(f"📝 Custom text mapping: {mapping.get('text')}")
+                                        # User mapped to text string - send it as keystrokes
+                                        text = mapping.get('text', '')
+                                        if text:
+                                            try:
+                                                send_text_as_keys(text)
+                                                key_name = ecodes.KEY.get(code, f"KEY_{code}")
+                                                # Don't log text content (may contain passwords)
+                                                print(f"📝 Custom text mapping triggered: {key_name}")
+                                            except Exception as e:
+                                                print(f"⚠️  Error sending text mapping: {e}")
                                 elif val == 0:  # Key up
                                     if mapping.get('type') == 'hid':
                                         hid_code = mapping.get('hid_code')
@@ -776,6 +857,11 @@ def send_text():
     except Exception as e:
         error_msg = str(e)
         return jsonify(ok=False, error=error_msg), 500
+
+@app.route("/favicon.ico")
+def favicon():
+    """Serve favicon from root path (browsers look here automatically)"""
+    return app.send_static_file('favicon.ico')
 
 @app.route("/health")
 def health():
@@ -1363,35 +1449,86 @@ def export_keyboard_mappings():
 @app.route("/keyboard_mappings/all", methods=["GET"])
 def get_all_keyboard_mappings():
     """Get all keyboards that have mappings or have been detected"""
-    # Include all keyboards from mappings, plus add detected keyboards info
-    all_keyboards = {}
+    # Group all keyboards (from mappings and detected) by uniq ID
+    keyboards_by_uniq = {}  # uniq -> {'best_name': str, 'unified_id': str, 'mappings': dict, 'is_connected': bool}
     
-    # Start with saved mappings
+    # First, process saved mappings
     for kbd_id, kbd_data in keyboard_mappings.items():
-        all_keyboards[kbd_id] = {
-            'keyboard_id': kbd_id,
-            'keyboard_name': kbd_data.get('keyboard_name', 'Unknown'),
-            'mapping_count': len(kbd_data.get('custom_mappings', {})),
-            'is_connected': False  # Will update below
-        }
+        # Extract uniq from kbd_id if present (format: "name_uniq")
+        uniq_key = None
+        kbd_name = kbd_data.get('keyboard_name', 'Unknown')
+        
+        # Try to extract uniq from the ID
+        if '_' in kbd_id and kbd_id != kbd_name:
+            # Might have uniq in the ID
+            parts = kbd_id.rsplit('_', 1)
+            if len(parts) == 2:
+                potential_uniq = parts[1]
+                # Check if this looks like a uniq (not just part of the name)
+                if len(potential_uniq) > 5 or ':' in potential_uniq:
+                    uniq_key = potential_uniq
+                    kbd_name = parts[0]
+        
+        if not uniq_key:
+            uniq_key = f"no_uniq_{kbd_id}"
+        
+        if uniq_key not in keyboards_by_uniq:
+            keyboards_by_uniq[uniq_key] = {
+                'best_name': kbd_name,
+                'unified_id': None,
+                'mappings': {},
+                'is_connected': False
+            }
+        
+        # Merge mappings
+        keyboards_by_uniq[uniq_key]['mappings'].update(kbd_data.get('custom_mappings', {}))
+        
+        # Update best name (prefer shorter, or one without "Keyboard" suffix)
+        if len(kbd_name) < len(keyboards_by_uniq[uniq_key]['best_name']):
+            keyboards_by_uniq[uniq_key]['best_name'] = kbd_name
+        elif "Keyboard" not in kbd_name and "Keyboard" in keyboards_by_uniq[uniq_key]['best_name']:
+            keyboards_by_uniq[uniq_key]['best_name'] = kbd_name
     
-    # Check which are currently connected
+    # Now process detected keyboards
     detected = detect_keyboards()
     for kbd in detected:
-        kbd_id = f"{kbd['name']}_{kbd['uniq']}" if kbd['uniq'] else kbd['name']
+        uniq_key = kbd.get('uniq') if kbd.get('uniq') else f"no_uniq_{kbd['name']}"
+        kbd_name = kbd['name']
         
-        if kbd_id in all_keyboards:
-            all_keyboards[kbd_id]['is_connected'] = True
-        else:
-            # New keyboard not in mappings yet
-            all_keyboards[kbd_id] = {
-                'keyboard_id': kbd_id,
-                'keyboard_name': kbd['name'],
-                'mapping_count': 0,
+        if uniq_key not in keyboards_by_uniq:
+            keyboards_by_uniq[uniq_key] = {
+                'best_name': kbd_name,
+                'unified_id': None,
+                'mappings': {},
                 'is_connected': True
             }
+        else:
+            keyboards_by_uniq[uniq_key]['is_connected'] = True
+        
+        # Update best name
+        current_best = keyboards_by_uniq[uniq_key]['best_name']
+        if len(kbd_name) < len(current_best):
+            keyboards_by_uniq[uniq_key]['best_name'] = kbd_name
+        elif "Keyboard" not in kbd_name and "Keyboard" in current_best:
+            keyboards_by_uniq[uniq_key]['best_name'] = kbd_name
     
-    return jsonify(keyboards=list(all_keyboards.values()))
+    # Create unified entries
+    result = []
+    for uniq_key, data in keyboards_by_uniq.items():
+        best_name = data['best_name']
+        if uniq_key.startswith("no_uniq_"):
+            unified_id = best_name
+        else:
+            unified_id = f"{best_name}_{uniq_key}"
+        
+        result.append({
+            'keyboard_id': unified_id,
+            'keyboard_name': best_name,
+            'mapping_count': len(data['mappings']),
+            'is_connected': data['is_connected']
+        })
+    
+    return jsonify(keyboards=result)
 
 @app.route("/keyboard_mappings/<kbd_id>", methods=["GET"])
 def get_keyboard_mappings_detail(kbd_id):
@@ -1517,6 +1654,59 @@ def delete_keyboard_mapping(kbd_id, code):
     
     return jsonify(ok=False, error="Mapping not found"), 404
 
+@app.route("/keyboard_mappings/listen", methods=["POST", "GET", "DELETE"])
+def keyboard_listen_mode():
+    """Start/stop listening mode for key capture"""
+    global listening_keyboard_id, captured_key_buffer
+    
+    if request.method == "GET":
+        # Get current listening status
+        with listening_lock:
+            return jsonify({
+                'listening': listening_keyboard_id is not None,
+                'keyboard_id': listening_keyboard_id,
+                'captured_keys': list(captured_key_buffer)
+            })
+    
+    elif request.method == "DELETE":
+        # Stop listening and clear buffer
+        with listening_lock:
+            listening_keyboard_id = None
+            captured_key_buffer.clear()
+        return jsonify(ok=True, message="Listening mode stopped")
+    
+    # POST - Start listening
+    data = request.json or {}
+    kbd_id = data.get('keyboard_id')
+    
+    if not kbd_id:
+        return jsonify(ok=False, error="keyboard_id required"), 400
+    
+    # Verify keyboard exists
+    if kbd_id not in keyboard_mappings:
+        return jsonify(ok=False, error="Keyboard not found"), 404
+    
+    with listening_lock:
+        listening_keyboard_id = kbd_id
+        captured_key_buffer.clear()
+    
+    return jsonify(ok=True, message=f"Listening for keys on {keyboard_mappings[kbd_id]['keyboard_name']}")
+
+@app.route("/keyboard_mappings/captured", methods=["GET", "DELETE"])
+def get_captured_keys():
+    """Get or clear captured keys"""
+    global captured_key_buffer
+    
+    if request.method == "DELETE":
+        with listening_lock:
+            captured_key_buffer.clear()
+        return jsonify(ok=True, message="Captured keys cleared")
+    
+    # GET - Return captured keys
+    with listening_lock:
+        keys = list(captured_key_buffer)
+    return jsonify(keys=keys, count=len(keys))
+
 @app.route("/emulation_profiles/export", methods=["GET"])
 def export_emulation_profiles():
     """Export all emulation profiles"""
@@ -1527,13 +1717,23 @@ def export_emulation_profiles():
 
 def main():
     """Entry point for keybird-server command"""
-    # Auto-start pass-through mode if evdev is available
+    global PASSTHROUGH_ENABLED, passthrough_thread, MOUSE_PASSTHROUGH_ENABLED, mouse_passthrough_thread
+    
+    # Auto-start pass-through modes on boot (always enabled regardless of previous state)
     if EVDEV_AVAILABLE:
-        print("🎹 Auto-starting pass-through mode...")
+        # Start keyboard pass-through
+        print("🎹 Auto-starting keyboard pass-through mode...")
         PASSTHROUGH_ENABLED = True
         passthrough_thread = threading.Thread(target=pass_through_loop, daemon=True)
         passthrough_thread.start()
-        print("✅ Pass-through mode active - physical keyboard ready!")
+        print("✅ Keyboard pass-through mode active - physical keyboard ready!")
+        
+        # Start mouse pass-through
+        print("🖱️  Auto-starting mouse pass-through mode...")
+        MOUSE_PASSTHROUGH_ENABLED = True
+        mouse_passthrough_thread = threading.Thread(target=mouse_pass_through_loop, daemon=True)
+        mouse_passthrough_thread.start()
+        print("✅ Mouse pass-through mode active - physical mouse ready!")
     
     print(f"🌐 Starting Keybird web server on http://0.0.0.0:8080")
     app.run(host="0.0.0.0", port=8080, debug=False)

@@ -1,4 +1,4 @@
-# Keybird v1.0.4
+# Keybird v1.0.5
 
 **Transform your Raspberry Pi into a professional USB keyboard, mouse, and media controller with web-based management.**
 
@@ -784,6 +784,7 @@ cd keybird/manual-deploy
 
 ## 🚀 Version History
 
+- **v1.0.5** (Nov 2025) - **Listen Mode & Branding**: Added key listening mode for easy keyboard mapping, auto-start pass-through on boot, keyboard deduplication, favicon integration, and rebranded to "Keybird"
 - **v1.0.4** (Oct 2025) - **PyPI Fix**: Corrected package build to include touch support for iPhone/iPad trackpad
 - **v1.0.3** (Oct 2025) - **Mobile Support**: Added touch support for iPhone/iPad trackpad - touch to move cursor, tap to click, two-finger right-click
 - **v1.0.2** (Oct 2025) - **Modernization**: Updated to Python 3.10+, replaced deprecated pkg_resources with importlib.resources

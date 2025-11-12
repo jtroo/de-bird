@@ -388,19 +388,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const infoDiv = document.getElementById("selected_kbd_info");
     const tableDiv = document.getElementById("mappings_table_container");
     const addDiv = document.getElementById("add_mapping_container");
+    const listenBtn = document.getElementById("listen_for_key_btn");
+    const stopBtn = document.getElementById("stop_listen_btn");
 
     if (!selectedKeyboardId) {
       infoDiv.style.display = 'none';
       tableDiv.style.display = 'none';
       addDiv.style.display = 'none';
+      listenBtn.style.display = 'none';
+      stopBtn.style.display = 'none';
+      document.getElementById("listening_status").style.display = 'none';
+      stopListening();
       return;
     }
     
     infoDiv.style.display = 'block';
     tableDiv.style.display = 'block';
     addDiv.style.display = 'block';
+    listenBtn.style.display = 'inline-block';
     
     await loadKeyboardMappings(selectedKeyboardId);
+    await checkListeningStatus();
   };
 
   async function loadKeyboardMappings(kbdId) {
@@ -498,6 +506,168 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.getElementById("refresh_keyboards_list").onclick = loadKeyboardsList;
   loadKeyboardsList();
+
+  // ===== KEY LISTENING MODE =====
+  let listeningPollInterval = null;
+  let lastCapturedKeyCount = 0;
+
+  async function startListening() {
+    if (!selectedKeyboardId) {
+      alert("Please select a keyboard first");
+      return;
+    }
+
+    try {
+      const response = await fetch("/keyboard_mappings/listen", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({keyboard_id: selectedKeyboardId})
+      });
+      const data = await response.json();
+      
+      if (response.ok) {
+        document.getElementById("listen_for_key_btn").style.display = 'none';
+        document.getElementById("stop_listen_btn").style.display = 'inline-block';
+        document.getElementById("listening_status").style.display = 'block';
+        
+        // Start polling for captured keys
+        if (listeningPollInterval) clearInterval(listeningPollInterval);
+        listeningPollInterval = setInterval(pollCapturedKeys, 200);
+        lastCapturedKeyCount = 0;
+      } else {
+        alert("❌ " + data.error);
+      }
+    } catch (error) {
+      alert("❌ Error: " + error);
+    }
+  }
+
+  async function stopListening() {
+    try {
+      await fetch("/keyboard_mappings/listen", {method: "DELETE"});
+      document.getElementById("listen_for_key_btn").style.display = 'inline-block';
+      document.getElementById("stop_listen_btn").style.display = 'none';
+      document.getElementById("listening_status").style.display = 'none';
+      
+      if (listeningPollInterval) {
+        clearInterval(listeningPollInterval);
+        listeningPollInterval = null;
+      }
+      lastCapturedKeyCount = 0;
+    } catch (error) {
+      console.error("Stop listening error:", error);
+    }
+  }
+
+  async function checkListeningStatus() {
+    try {
+      const response = await fetch("/keyboard_mappings/listen");
+      const data = await response.json();
+      
+      if (data.listening && data.keyboard_id === selectedKeyboardId) {
+        // We're already listening to this keyboard
+        document.getElementById("listen_for_key_btn").style.display = 'none';
+        document.getElementById("stop_listen_btn").style.display = 'inline-block';
+        document.getElementById("listening_status").style.display = 'block';
+        
+        if (!listeningPollInterval) {
+          listeningPollInterval = setInterval(pollCapturedKeys, 200);
+        }
+        lastCapturedKeyCount = data.captured_keys.length;
+      } else {
+        document.getElementById("listen_for_key_btn").style.display = 'inline-block';
+        document.getElementById("stop_listen_btn").style.display = 'none';
+        document.getElementById("listening_status").style.display = 'none';
+      }
+    } catch (error) {
+      console.error("Check listening status error:", error);
+    }
+  }
+
+  async function pollCapturedKeys() {
+    try {
+      const response = await fetch("/keyboard_mappings/captured");
+      const data = await response.json();
+      
+      // Check if we have new keys
+      if (data.keys.length > lastCapturedKeyCount) {
+        // Get the most recent key
+        const newKey = data.keys[data.keys.length - 1];
+        lastCapturedKeyCount = data.keys.length;
+        
+        // Show mapping dialog
+        showKeyMappingDialog(newKey);
+      }
+    } catch (error) {
+      console.error("Poll captured keys error:", error);
+    }
+  }
+
+  async function showKeyMappingDialog(capturedKey) {
+    // Stop listening temporarily while user decides
+    await stopListening();
+    
+    const keyName = capturedKey.name || capturedKey.key_name || `Key_${capturedKey.code}`;
+    const keyCode = capturedKey.code;
+    
+    // Ask what to do with this key
+    const action = prompt(
+      `Key captured: ${keyName} (code: ${keyCode})\n\n` +
+      `What would you like to do?\n` +
+      `1. Suppress (ignore this key)\n` +
+      `2. Map to HID code (enter hex code like 0x3A)\n` +
+      `3. Map to text (enter text string)\n` +
+      `4. Cancel\n\n` +
+      `Enter 1, 2, 3, or 4:`,
+      "1"
+    );
+    
+    if (!action || action === "4" || action.toLowerCase() === "cancel") {
+      return;
+    }
+    
+    let payload = {code: keyCode, type: null};
+    
+    if (action === "1" || action.toLowerCase() === "suppress") {
+      payload.type = 'suppress';
+    } else if (action === "2" || action.toLowerCase().includes("hid")) {
+      const hidCode = prompt(`Enter HID code in hex (e.g., 0x3A for Caps Lock):`, "");
+      if (!hidCode) return;
+      payload.type = 'hid';
+      payload.hid_code = parseInt(hidCode.replace('0x', ''), 16);
+    } else if (action === "3" || action.toLowerCase().includes("text")) {
+      const text = prompt(`Enter text to send when this key is pressed:`, "");
+      if (!text) return;
+      payload.type = 'text';
+      payload.text = text;
+    } else {
+      return;
+    }
+    
+    // Save the mapping
+    try {
+      const response = await fetch(`/keyboard_mappings/${encodeURIComponent(selectedKeyboardId)}/mapping`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      
+      if (response.ok) {
+        alert("✅ " + data.message);
+        await loadKeyboardMappings(selectedKeyboardId);
+        // Clear captured keys
+        await fetch("/keyboard_mappings/captured", {method: "DELETE"});
+      } else {
+        alert("❌ " + data.error);
+      }
+    } catch (error) {
+      alert("❌ Error: " + error);
+    }
+  }
+
+  document.getElementById("listen_for_key_btn").onclick = startListening;
+  document.getElementById("stop_listen_btn").onclick = stopListening;
 
   // ===== TRACKPAD CALIBRATION =====
   const calibrationModal = new bootstrap.Modal(document.getElementById('calibration_overlay'));
