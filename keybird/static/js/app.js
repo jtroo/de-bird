@@ -61,9 +61,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
+  // Toggle lock key from GUI
+  async function toggleLockKey(lockType) {
+    try {
+      const response = await fetch("/toggle_lock_key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lock_type: lockType })
+      });
+      
+      const data = await response.json();
+      
+      if (data.ok) {
+        // Update status immediately (will be confirmed by next poll)
+        console.log(`Toggled ${lockType}`);
+      } else {
+        alert("❌ " + (data.error || "Failed to toggle lock key"));
+      }
+    } catch (error) {
+      console.error("Toggle lock key failed:", error);
+      alert("❌ Error: " + error);
+    }
+  }
+  
   // Poll LED status every 500ms for real-time updates
   updateLEDStatus();
   setInterval(updateLEDStatus, 500);
+  
+  // Add click handlers to LED indicators
+  ['num_lock', 'caps_lock', 'scroll_lock'].forEach(lockType => {
+    const indicator = document.querySelector(`.led-indicator[data-led="${lockType}"]`);
+    if (indicator && indicator.classList.contains('clickable')) {
+      indicator.addEventListener('click', () => {
+        toggleLockKey(lockType);
+      });
+    }
+  });
 
   // ===== PASSTHROUGH TOGGLES =====
   async function setupToggle(toggleId, endpoint) {

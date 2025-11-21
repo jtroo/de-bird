@@ -1081,6 +1081,46 @@ def led_status():
     with led_state_lock:
         return jsonify(ok=True, **current_led_state)
 
+@app.route("/toggle_lock_key", methods=["POST"])
+def toggle_lock_key():
+    """Toggle a lock key (Caps Lock, Num Lock, Scroll Lock) on the host"""
+    lock_type = request.json.get("lock_type")
+    
+    if not lock_type or lock_type not in ["num_lock", "caps_lock", "scroll_lock"]:
+        return jsonify(ok=False, error="Invalid lock_type"), 400
+    
+    # Check USB connection first
+    state = get_usb_state()
+    if state != "configured":
+        return jsonify(ok=False, error=f"USB host not connected (state: {state})"), 400
+    
+    # Map lock type to HID keycode
+    lock_keycodes = {
+        "num_lock": 0x53,      # KEY_NUMLOCK
+        "caps_lock": 0x39,    # KEY_CAPSLOCK
+        "scroll_lock": 0x47   # KEY_SCROLLLOCK
+    }
+    
+    keycode = lock_keycodes[lock_type]
+    
+    try:
+        # Send keypress (press and release) to toggle the lock
+        with open(HID_PATH, "wb", buffering=0) as hid:
+            # Press the key
+            report = bytes([0x00, 0x00, keycode, 0, 0, 0, 0, 0])
+            hid.write(report)
+            hid.flush()
+            time.sleep(0.05)  # Short delay
+            
+            # Release the key
+            report = bytes([0x00, 0x00, 0x00, 0, 0, 0, 0, 0])
+            hid.write(report)
+            hid.flush()
+        
+        return jsonify(ok=True, lock_type=lock_type, message=f"Toggled {lock_type}")
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)), 500
+
 @app.route("/passthrough", methods=["POST", "GET"])
 def passthrough_control():
     global PASSTHROUGH_ENABLED, passthrough_thread, LED_FORWARDING_ENABLED, led_forwarding_thread

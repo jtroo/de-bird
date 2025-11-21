@@ -125,12 +125,33 @@
   gap: 0.25rem;
   padding: 0.5rem;
   min-width: 100px;
+  transition: all 0.2s ease;
+}
+
+.led-indicator.clickable {
+  cursor: pointer;
+  border-radius: 0.375rem;
+  user-select: none;
+}
+
+.led-indicator.clickable:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  transform: scale(1.05);
+}
+
+.led-indicator.clickable:active {
+  transform: scale(0.98);
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .led-label {
   font-size: 0.875rem;
   color: #adb5bd;
   font-weight: 500;
+}
+
+.led-indicator.clickable .led-label {
+  color: #dee2e6;
 }
 
 .led-badge {
@@ -146,6 +167,14 @@
 
 .led-indicator[data-state="off"] .led-badge {
   background-color: #6c757d !important; /* Gray when off */
+}
+
+.led-indicator.clickable[data-state="on"]:hover .led-badge {
+  background-color: #20c997 !important; /* Lighter green on hover when on */
+}
+
+.led-indicator.clickable[data-state="off"]:hover .led-badge {
+  background-color: #868e96 !important; /* Lighter gray on hover when off */
 }
 
 @keyframes led-pulse {
