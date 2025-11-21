@@ -197,6 +197,9 @@ passthrough_thread = None
 MOUSE_PASSTHROUGH_ENABLED = False
 mouse_passthrough_thread = None
 
+LED_FORWARDING_ENABLED = False
+led_forwarding_thread = None
+
 def detect_mice():
     """Detect all physical mice plugged into the Pi"""
     if not EVDEV_AVAILABLE:
@@ -829,6 +832,153 @@ if EVDEV_AVAILABLE:
         finally:
             print("⏹️  Mouse pass-through mode STOPPED")
 
+    # LED forwarding function - reads LED state from host and forwards to physical keyboards
+    def led_forwarding_loop():
+        """Read LED output reports from /dev/hidg0 and forward to physical keyboards"""
+        global LED_FORWARDING_ENABLED
+        
+        if not EVDEV_AVAILABLE:
+            return
+        
+        import fcntl
+        
+        print("💡 LED forwarding: Waiting for /dev/hidg0...", flush=True)
+        
+        # Wait for HID device to be available
+        max_wait = 30
+        waited = 0
+        while not os.path.exists(HID_PATH) and waited < max_wait:
+            time.sleep(1)
+            waited += 1
+            if not LED_FORWARDING_ENABLED:
+                return
+        
+        if not os.path.exists(HID_PATH):
+            print(f"⚠️  LED forwarding: {HID_PATH} not available after {max_wait}s", flush=True)
+            return
+        
+        print(f"💡 LED forwarding: Reading from {HID_PATH}", flush=True)
+        
+        # Track last LED state to avoid redundant writes
+        last_led_state = None
+        
+        # Cache of keyboard devices that support LEDs
+        # Refresh this list periodically in case devices are plugged/unplugged
+        led_keyboards = []  # List of (InputDevice, led_caps)
+        last_scan_time = 0
+        scan_interval = 30  # Rescan for keyboards every 30 seconds
+        
+        def scan_led_keyboards():
+            """Scan for keyboards that support LED output"""
+            keyboards = []
+            for path in glob.glob("/dev/input/event*"):
+                try:
+                    dev = InputDevice(path)
+                    caps = dev.capabilities()
+                    
+                    # Check if it's a keyboard (has KEY_A and KEY_ENTER)
+                    key_caps = caps.get(ecodes.EV_KEY, [])
+                    if ecodes.KEY_A not in key_caps or ecodes.KEY_ENTER not in key_caps:
+                        continue
+                    
+                    # Check if keyboard supports LED output
+                    led_caps = caps.get(ecodes.EV_LED, [])
+                    if led_caps:
+                        keyboards.append((dev, led_caps))
+                except (OSError, PermissionError):
+                    # Device might not be accessible
+                    continue
+                except Exception:
+                    # Skip devices that cause errors
+                    continue
+            return keyboards
+        
+        # Initial scan
+        led_keyboards = scan_led_keyboards()
+        print(f"💡 Found {len(led_keyboards)} keyboard(s) with LED support", flush=True)
+        
+        try:
+            with open(HID_PATH, "rb", buffering=0) as hid:
+                # Set non-blocking mode
+                flags = fcntl.fcntl(hid.fileno(), fcntl.F_GETFL)
+                fcntl.fcntl(hid.fileno(), fcntl.F_SETFL, flags | os.O_NONBLOCK)
+                
+                while LED_FORWARDING_ENABLED:
+                    # Periodically rescan for keyboards in case devices are plugged/unplugged
+                    current_time = time.time()
+                    if current_time - last_scan_time > scan_interval:
+                        led_keyboards = scan_led_keyboards()
+                        last_scan_time = current_time
+                    
+                    try:
+                        # Read 1-byte LED output report from host
+                        # The host sends this when Caps Lock, Num Lock, or Scroll Lock state changes
+                        led_byte = hid.read(1)
+                        
+                        if not led_byte or len(led_byte) == 0:
+                            # No data available, wait a bit
+                            time.sleep(0.1)
+                            continue
+                        
+                        led_state = led_byte[0]
+                        
+                        # Only process if LED state changed
+                        if led_state == last_led_state:
+                            continue
+                        
+                        last_led_state = led_state
+                        
+                        # Parse LED bits:
+                        # Bit 0 = Num Lock
+                        # Bit 1 = Caps Lock
+                        # Bit 2 = Scroll Lock
+                        num_lock = bool(led_state & 0x01)
+                        caps_lock = bool(led_state & 0x02)
+                        scroll_lock = bool(led_state & 0x04)
+                        
+                        print(f"💡 LED state from host: Num={num_lock} Caps={caps_lock} Scroll={scroll_lock} (0x{led_state:02x})", flush=True)
+                        
+                        # Forward LED state to all cached keyboards
+                        keyboards_updated = 0
+                        for dev, led_caps in led_keyboards:
+                            try:
+                                # Write LED events to physical keyboard
+                                # evdev.write(type, code, value) where value is 0 or 1
+                                if ecodes.LED_NUML in led_caps:
+                                    dev.write(ecodes.EV_LED, ecodes.LED_NUML, 1 if num_lock else 0)
+                                if ecodes.LED_CAPSL in led_caps:
+                                    dev.write(ecodes.EV_LED, ecodes.LED_CAPSL, 1 if caps_lock else 0)
+                                if ecodes.LED_SCROLLL in led_caps:
+                                    dev.write(ecodes.EV_LED, ecodes.LED_SCROLLL, 1 if scroll_lock else 0)
+                                
+                                keyboards_updated += 1
+                                
+                            except (OSError, PermissionError):
+                                # Device might have been unplugged or permissions changed
+                                continue
+                            except Exception as e:
+                                # Skip devices that cause errors
+                                continue
+                        
+                        if keyboards_updated > 0:
+                            print(f"💡 Forwarded LED state to {keyboards_updated} keyboard(s)", flush=True)
+                        
+                    except BlockingIOError:
+                        # No data available, continue
+                        time.sleep(0.1)
+                        continue
+                    except Exception as e:
+                        print(f"⚠️  LED forwarding read error: {e}", flush=True)
+                        time.sleep(0.5)
+                        continue
+                        
+        except Exception as e:
+            print(f"❌ LED forwarding error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+        finally:
+            print("⏹️  LED forwarding STOPPED", flush=True)
+
 # --------------- Web UI --------------------------
 
 @app.route("/")
@@ -870,7 +1020,7 @@ def health():
 
 @app.route("/passthrough", methods=["POST", "GET"])
 def passthrough_control():
-    global PASSTHROUGH_ENABLED, passthrough_thread
+    global PASSTHROUGH_ENABLED, passthrough_thread, LED_FORWARDING_ENABLED, led_forwarding_thread
     
     if not EVDEV_AVAILABLE:
         return jsonify(ok=False, error="evdev not installed"), 400
@@ -886,12 +1036,19 @@ def passthrough_control():
         PASSTHROUGH_ENABLED = True
         passthrough_thread = threading.Thread(target=pass_through_loop, daemon=True)
         passthrough_thread.start()
+        
+        # Start LED forwarding
+        LED_FORWARDING_ENABLED = True
+        led_forwarding_thread = threading.Thread(target=led_forwarding_loop, daemon=True)
+        led_forwarding_thread.start()
+        
         return jsonify(ok=True, enabled=True, message="Pass-through started")
     
     elif not enabled and PASSTHROUGH_ENABLED:
         # Stop pass-through
         PASSTHROUGH_ENABLED = False
-        # Thread will exit on its own
+        LED_FORWARDING_ENABLED = False
+        # Threads will exit on their own
         return jsonify(ok=True, enabled=False, message="Pass-through stopped")
     
     return jsonify(ok=True, enabled=PASSTHROUGH_ENABLED)
@@ -1718,6 +1875,7 @@ def export_emulation_profiles():
 def main():
     """Entry point for keybird-server command"""
     global PASSTHROUGH_ENABLED, passthrough_thread, MOUSE_PASSTHROUGH_ENABLED, mouse_passthrough_thread
+    global LED_FORWARDING_ENABLED, led_forwarding_thread
     
     # Auto-start pass-through modes on boot (always enabled regardless of previous state)
     if EVDEV_AVAILABLE:
@@ -1727,6 +1885,13 @@ def main():
         passthrough_thread = threading.Thread(target=pass_through_loop, daemon=True)
         passthrough_thread.start()
         print("✅ Keyboard pass-through mode active - physical keyboard ready!")
+        
+        # Start LED forwarding (forwards host LED state to physical keyboards)
+        print("💡 Auto-starting LED forwarding...")
+        LED_FORWARDING_ENABLED = True
+        led_forwarding_thread = threading.Thread(target=led_forwarding_loop, daemon=True)
+        led_forwarding_thread.start()
+        print("✅ LED forwarding active - host LED state will sync to physical keyboards!")
         
         # Start mouse pass-through
         print("🖱️  Auto-starting mouse pass-through mode...")
