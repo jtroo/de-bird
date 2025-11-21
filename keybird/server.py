@@ -562,7 +562,7 @@ if EVDEV_AVAILABLE:
             
             print(f"   Mappings: {len(keyboard_mappings[kbd_id]['custom_mappings'])}", flush=True)
         if not keyboards:
-            print("⚠️  No keyboards found for pass-through; waiting...")
+            print("⚠️  No keyboards found for pass-through; waiting...", flush=True)
             time.sleep(3)
             if PASSTHROUGH_ENABLED:
                 return pass_through_loop()
@@ -571,154 +571,192 @@ if EVDEV_AVAILABLE:
         ks = KeyState()
         print(f"✅ Pass-through mode ACTIVE - monitoring {len(keyboards)} keyboard(s)", flush=True)
         
-        try:
-            with open(HID_PATH, "wb", buffering=0) as hid:
-                while PASSTHROUGH_ENABLED:
-                    # Monitor all keyboard file descriptors
-                    fds = [kbd.fd for kbd in keyboards]
-                    r, _, _ = select.select(fds, [], [], 0.5)
-                    if not r:
-                        continue
-                    
-                    # Process events from whichever keyboard(s) have data
-                    for fd in r:
-                        dev, kbd_id = keyboard_map[fd]
-                        active_physical_keyboard_id = kbd_id  # Update active keyboard
+        # Retry loop for device availability
+        retry_count = 0
+        max_retries = 5
+        
+        while PASSTHROUGH_ENABLED and retry_count < max_retries:
+            try:
+                # Check if HID device exists before opening
+                if not os.path.exists(HID_PATH):
+                    print(f"⚠️  {HID_PATH} not available, waiting...", flush=True)
+                    time.sleep(2)
+                    retry_count += 1
+                    continue
+                
+                with open(HID_PATH, "wb", buffering=0) as hid:
+                    while PASSTHROUGH_ENABLED:
+                        # Monitor all keyboard file descriptors
+                        fds = [kbd.fd for kbd in keyboards]
+                        r, _, _ = select.select(fds, [], [], 0.5)
+                        if not r:
+                            continue
                         
-                        for ev in dev.read():
-                            if not PASSTHROUGH_ENABLED:
-                                break
-                            if ev.type != ecodes.EV_KEY:
-                                continue
+                        # Process events from whichever keyboard(s) have data
+                        for fd in r:
+                            dev, kbd_id = keyboard_map[fd]
+                            active_physical_keyboard_id = kbd_id  # Update active keyboard
                             
-                            kev = categorize(ev)
-                            code = kev.scancode
-                            val = kev.keystate  # 0=up,1=down,2=hold
-                            
-                            # Check if we're in listening mode for this keyboard
-                            with listening_lock:
-                                is_listening = (listening_keyboard_id == kbd_id)
-                            
-                            # Handle modifier keys
-                            if code in MOD_KEYS:
-                                bit = MOD_KEYS[code]
-                                if val:
-                                    ks.mod |= bit
-                                else:
-                                    ks.mod &= ~bit
-                                
-                                # If listening, suppress modifier keys but still track state
-                                if is_listening:
-                                    # Still track modifier state for combinations, but don't send
+                            for ev in dev.read():
+                                if not PASSTHROUGH_ENABLED:
+                                    break
+                                if ev.type != ecodes.EV_KEY:
                                     continue
+                                
+                                kev = categorize(ev)
+                                code = kev.scancode
+                                val = kev.keystate  # 0=up,1=down,2=hold
+                                
+                                # Check if we're in listening mode for this keyboard
+                                with listening_lock:
+                                    is_listening = (listening_keyboard_id == kbd_id)
+                                
+                                # Handle modifier keys
+                                if code in MOD_KEYS:
+                                    bit = MOD_KEYS[code]
+                                    if val:
+                                        ks.mod |= bit
+                                    else:
+                                        ks.mod &= ~bit
+                                    
+                                    # If listening, suppress modifier keys but still track state
+                                    if is_listening:
+                                        # Still track modifier state for combinations, but don't send
+                                        continue
+                                    
+                                    hid.write(ks.report())
+                                    hid.flush()
+                                    continue
+                                
+                                # If listening mode is active for this keyboard, capture the key
+                                if is_listening and val == 1:  # Only capture on key down
+                                    key_name = ecodes.KEY.get(code, f"KEY_{code}")
+                                    mod_names = []
+                                    if ks.mod & 1: mod_names.append('Ctrl')
+                                    if ks.mod & 2: mod_names.append('Shift')
+                                    if ks.mod & 4: mod_names.append('Alt')
+                                    if ks.mod & 8: mod_names.append('Meta')
+                                    mod_string = '+'.join(mod_names) if mod_names else ''
+                                    full_name = f"{mod_string}+{key_name}" if mod_string else key_name
+                                    
+                                    with listening_lock:
+                                        captured_key_buffer.append({
+                                            'code': code,
+                                            'name': full_name,
+                                            'key_name': key_name,
+                                            'keyboard_id': kbd_id,
+                                            'modifiers': ks.mod,
+                                            'timestamp': time.time()
+                                        })
+                                    # Don't pass through the key when capturing - suppress it
+                                    continue
+                                
+                                # Check if it's a media key
+                                if code in MEDIA_KEY_TO_USAGE:
+                                    if val == 1:  # Only on key down
+                                        usage_id = MEDIA_KEY_TO_USAGE[code]
+                                        success = send_media_key(usage_id)
+                                        key_name = ecodes.KEY.get(code, f"MEDIA_{code}")
+                                        if success:
+                                            print(f"🎵 Sent media key: {key_name}")
+                                        else:
+                                            print(f"⚠️  Media key failed (hidg1 not available): {key_name}")
+                                    continue
+                                
+                                # Check custom mappings for THIS keyboard
+                                current_kbd_mappings = keyboard_mappings.get(active_physical_keyboard_id, {}).get('custom_mappings', {})
+                                if code in current_kbd_mappings:
+                                    mapping = current_kbd_mappings[code]
+                                    
+                                    # Handle 'suppress' type - swallow the key (e.g., YubiKey Enter)
+                                    if mapping.get('type') == 'suppress':
+                                        # Silently ignore this key
+                                        key_name = ecodes.KEY.get(code, f"KEY_{code}")
+                                        if val == 1:
+                                            print(f"🚫 Suppressed key: {key_name} from {keyboard_mappings.get(active_physical_keyboard_id, {}).get('keyboard_name', 'Unknown')}")
+                                        continue
+                                    
+                                    if val == 1:  # Only on key down
+                                        if mapping.get('type') == 'hid':
+                                            # User mapped to specific HID code
+                                            hid_code = mapping.get('hid_code')
+                                            if hid_code:
+                                                ks.press(hid_code)
+                                                hid.write(ks.report())
+                                                hid.flush()
+                                        elif mapping.get('type') == 'text':
+                                            # User mapped to text string - send it as keystrokes
+                                            text = mapping.get('text', '')
+                                            if text:
+                                                try:
+                                                    send_text_as_keys(text)
+                                                    key_name = ecodes.KEY.get(code, f"KEY_{code}")
+                                                    # Don't log text content (may contain passwords)
+                                                    print(f"📝 Custom text mapping triggered: {key_name}")
+                                                except Exception as e:
+                                                    print(f"⚠️  Error sending text mapping: {e}")
+                                    elif val == 0:  # Key up
+                                        if mapping.get('type') == 'hid':
+                                            hid_code = mapping.get('hid_code')
+                                            if hid_code:
+                                                ks.release(hid_code)
+                                                hid.write(ks.report())
+                                                hid.flush()
+                                    continue
+                                
+                                # Regular keys
+                                hid_code = LINUX_TO_HID.get(code)
+                                if hid_code is None:
+                                    # Log unmapped keys to buffer for UI display (with keyboard ID)
+                                    if val == 1:  # Only on key down
+                                        key_name = ecodes.KEY.get(code, f"UNKNOWN_{code}")
+                                        unmapped_keys_buffer.append({
+                                            'code': code,
+                                            'name': key_name,
+                                            'timestamp': time.time(),
+                                            'keyboard_id': active_physical_keyboard_id,
+                                            'keyboard_name': keyboard_mappings.get(active_physical_keyboard_id, {}).get('keyboard_name', 'Unknown')
+                                        })
+                                        print(f"⚠️  Unmapped key: {key_name} (code={code}) on {keyboard_mappings.get(active_physical_keyboard_id, {}).get('keyboard_name', 'Unknown')}")
+                                    continue
+                                
+                                if val:
+                                    ks.press(hid_code)
+                                else:
+                                    ks.release(hid_code)
                                 
                                 hid.write(ks.report())
                                 hid.flush()
-                                continue
-                            
-                            # If listening mode is active for this keyboard, capture the key
-                            if is_listening and val == 1:  # Only capture on key down
-                                key_name = ecodes.KEY.get(code, f"KEY_{code}")
-                                mod_names = []
-                                if ks.mod & 1: mod_names.append('Ctrl')
-                                if ks.mod & 2: mod_names.append('Shift')
-                                if ks.mod & 4: mod_names.append('Alt')
-                                if ks.mod & 8: mod_names.append('Meta')
-                                mod_string = '+'.join(mod_names) if mod_names else ''
-                                full_name = f"{mod_string}+{key_name}" if mod_string else key_name
-                                
-                                with listening_lock:
-                                    captured_key_buffer.append({
-                                        'code': code,
-                                        'name': full_name,
-                                        'key_name': key_name,
-                                        'keyboard_id': kbd_id,
-                                        'modifiers': ks.mod,
-                                        'timestamp': time.time()
-                                    })
-                                # Don't pass through the key when capturing - suppress it
-                                continue
-                            
-                            # Check if it's a media key
-                            if code in MEDIA_KEY_TO_USAGE:
-                                if val == 1:  # Only on key down
-                                    usage_id = MEDIA_KEY_TO_USAGE[code]
-                                    success = send_media_key(usage_id)
-                                    key_name = ecodes.KEY.get(code, f"MEDIA_{code}")
-                                    if success:
-                                        print(f"🎵 Sent media key: {key_name}")
-                                    else:
-                                        print(f"⚠️  Media key failed (hidg1 not available): {key_name}")
-                                continue
-                            
-                            # Check custom mappings for THIS keyboard
-                            current_kbd_mappings = keyboard_mappings.get(active_physical_keyboard_id, {}).get('custom_mappings', {})
-                            if code in current_kbd_mappings:
-                                mapping = current_kbd_mappings[code]
-                                
-                                # Handle 'suppress' type - swallow the key (e.g., YubiKey Enter)
-                                if mapping.get('type') == 'suppress':
-                                    # Silently ignore this key
-                                    key_name = ecodes.KEY.get(code, f"KEY_{code}")
-                                    if val == 1:
-                                        print(f"🚫 Suppressed key: {key_name} from {keyboard_mappings.get(active_physical_keyboard_id, {}).get('keyboard_name', 'Unknown')}")
-                                    continue
-                                
-                                if val == 1:  # Only on key down
-                                    if mapping.get('type') == 'hid':
-                                        # User mapped to specific HID code
-                                        hid_code = mapping.get('hid_code')
-                                        if hid_code:
-                                            ks.press(hid_code)
-                                            hid.write(ks.report())
-                                            hid.flush()
-                                    elif mapping.get('type') == 'text':
-                                        # User mapped to text string - send it as keystrokes
-                                        text = mapping.get('text', '')
-                                        if text:
-                                            try:
-                                                send_text_as_keys(text)
-                                                key_name = ecodes.KEY.get(code, f"KEY_{code}")
-                                                # Don't log text content (may contain passwords)
-                                                print(f"📝 Custom text mapping triggered: {key_name}")
-                                            except Exception as e:
-                                                print(f"⚠️  Error sending text mapping: {e}")
-                                elif val == 0:  # Key up
-                                    if mapping.get('type') == 'hid':
-                                        hid_code = mapping.get('hid_code')
-                                        if hid_code:
-                                            ks.release(hid_code)
-                                            hid.write(ks.report())
-                                            hid.flush()
-                                continue
-                            
-                            # Regular keys
-                            hid_code = LINUX_TO_HID.get(code)
-                            if hid_code is None:
-                                # Log unmapped keys to buffer for UI display (with keyboard ID)
-                                if val == 1:  # Only on key down
-                                    key_name = ecodes.KEY.get(code, f"UNKNOWN_{code}")
-                                    unmapped_keys_buffer.append({
-                                        'code': code,
-                                        'name': key_name,
-                                        'timestamp': time.time(),
-                                        'keyboard_id': active_physical_keyboard_id,
-                                        'keyboard_name': keyboard_mappings.get(active_physical_keyboard_id, {}).get('keyboard_name', 'Unknown')
-                                    })
-                                    print(f"⚠️  Unmapped key: {key_name} (code={code}) on {keyboard_mappings.get(active_physical_keyboard_id, {}).get('keyboard_name', 'Unknown')}")
-                                continue
-                            
-                            if val:
-                                ks.press(hid_code)
-                            else:
-                                ks.release(hid_code)
-                            
-                            hid.write(ks.report())
-                            hid.flush()
-        except Exception as e:
-            print(f"❌ Pass-through error: {e}")
-        finally:
-            print("⏹️  Pass-through mode STOPPED")
+                
+                # If we exit the with block normally, break the retry loop
+                break
+                
+            except (OSError, IOError) as e:
+                # Device error - might be temporary
+                errno = getattr(e, 'errno', None)
+                if errno == 19:  # No such device
+                    print(f"⚠️  HID device temporarily unavailable: {e}, retrying...", flush=True)
+                else:
+                    print(f"⚠️  Pass-through I/O error: {e}, retrying...", flush=True)
+                retry_count += 1
+                time.sleep(2)
+                if retry_count >= max_retries:
+                    print(f"❌ Pass-through failed after {max_retries} retries", flush=True)
+                    break
+                continue
+            except Exception as e:
+                print(f"❌ Pass-through error: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+                break
+        
+        # If still enabled, restart the loop
+        if PASSTHROUGH_ENABLED:
+            print("🔄 Restarting pass-through loop...", flush=True)
+            time.sleep(2)
+            return pass_through_loop()
+        
+        print("⏹️  Pass-through mode STOPPED", flush=True)
 
     # Mouse pass-through function
     def mouse_pass_through_loop():
