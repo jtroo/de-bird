@@ -200,6 +200,15 @@ mouse_passthrough_thread = None
 LED_FORWARDING_ENABLED = False
 led_forwarding_thread = None
 
+# Current LED state from host (updated by LED forwarding thread)
+led_state_lock = threading.Lock()
+current_led_state = {
+    'num_lock': False,
+    'caps_lock': False,
+    'scroll_lock': False,
+    'raw': 0
+}
+
 def detect_mice():
     """Detect all physical mice plugged into the Pi"""
     if not EVDEV_AVAILABLE:
@@ -835,7 +844,7 @@ if EVDEV_AVAILABLE:
     # LED forwarding function - reads LED state from host and forwards to physical keyboards
     def led_forwarding_loop():
         """Read LED output reports from /dev/hidg0 and forward to physical keyboards"""
-        global LED_FORWARDING_ENABLED
+        global LED_FORWARDING_ENABLED, current_led_state
         
         if not EVDEV_AVAILABLE:
             return
@@ -936,6 +945,15 @@ if EVDEV_AVAILABLE:
                         caps_lock = bool(led_state & 0x02)
                         scroll_lock = bool(led_state & 0x04)
                         
+                        # Update global LED state for API access
+                        with led_state_lock:
+                            current_led_state = {
+                                'num_lock': num_lock,
+                                'caps_lock': caps_lock,
+                                'scroll_lock': scroll_lock,
+                                'raw': led_state
+                            }
+                        
                         print(f"💡 LED state from host: Num={num_lock} Caps={caps_lock} Scroll={scroll_lock} (0x{led_state:02x})", flush=True)
                         
                         # Forward LED state to all cached keyboards
@@ -1017,6 +1035,13 @@ def favicon():
 def health():
     state = get_usb_state()
     return jsonify(status="ok", device="hidg0", usb_state=state)
+
+@app.route("/led_status", methods=["GET"])
+def led_status():
+    """Get current LED state (Caps Lock, Num Lock, Scroll Lock) from host"""
+    global current_led_state
+    with led_state_lock:
+        return jsonify(ok=True, **current_led_state)
 
 @app.route("/passthrough", methods=["POST", "GET"])
 def passthrough_control():

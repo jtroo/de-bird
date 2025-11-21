@@ -1,0 +1,56 @@
+---
+description: Code Distillation and Reflux - core principles for all projects
+---
+
+# Code Distillation & Reflux: Core Principle
+
+**Code Distillation** is a fundamental principle for all projects in this repository. It guides how we structure code, documentation, and the repository itself.
+
+## Documentation Organization
+
+- **The `docs/` folder is git-ignored** - All documentation goes here, not in the root directory
+- **No markdown sprawl** - Keep root directory clean; minimal, essential files only
+- **Distilled documentation** - Documentation should be concise and focused, following distillation principles
+
+## Core Distillation Concepts
+
+Read these files in `docs/` to understand distillation:
+- `docs/essence.md` - Core concepts and principles
+- `docs/method.md` - The 10-step distillation method
+- `docs/tactics.md` - Practical tactics and metrics
+
+## Applying Distillation
+
+When working on any project:
+
+1. **Shrink surface area** - Prefer fewer files, fewer public APIs, fewer configs
+2. **Specialize the hot path** - Optimize for the dominant use cases
+3. **Remove optionality** - Freeze configs that aren't safety-critical
+4. **Encode invariants** - Make illegal states unrepresentable
+5. **Keep it minimal** - No arbitrary files in root; no documentation sprawl
+
+## Repository Structure
+
+- **Root directory**: Only essential files (README, config files, source code)
+- **Documentation**: All in `docs/` (git-ignored)
+- **No markdown sprawl**: Avoid multiple `.md` files in root; consolidate in `docs/`
+
+## Before Creating Files
+
+Ask yourself:
+- Is this file essential to the project's core function?
+- Can this documentation be consolidated with existing docs?
+- Does this belong in `docs/` rather than root?
+- Am I adding optionality that could be frozen or removed?
+
+## Example: Distilled Repository
+
+A well-distilled repository has:
+- Minimal root directory (README, essential configs, source)
+- All documentation consolidated in `docs/`
+- No redundant or optional files
+- Clear, focused purpose
+
+---
+
+**Remember**: Distillation is about making the *simplest thing the only thing that can happen*. Apply this to code, documentation, and repository structure.

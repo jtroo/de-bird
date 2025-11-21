@@ -1,0 +1,290 @@
+---
+description: Git and GitHub management best practices - local development workflow and preventing unauthorized pushes
+globs: ["**/.git/**", "**/.gitignore", "**/.gitattributes"]
+---
+
+# Git and GitHub Management Guide
+
+*This rule provides best practices for managing Git locally and ensuring GitHub is only updated when explicitly requested.*
+
+## Core Principles
+
+1. **Never auto-commit to GitHub** - Only commit locally unless user explicitly requests pushing to remote
+2. **Use dev branch for development** - Keep main clean, work on dev branch
+3. **Explicit push requests only** - Never push to GitHub without explicit user request
+4. **Local-first workflow** - All commits are local until user requests publishing
+
+## Branch Management
+
+### Development Branch Strategy
+
+**Always create and use a `dev` branch for active development:**
+
+```bash
+# Initial setup (one time)
+git checkout -b dev
+git push -u origin dev  # Only if user requests publishing dev branch
+
+# Daily workflow
+git checkout dev        # Start work on dev branch
+# ... make changes ...
+git add .
+git commit -m "Description"
+# Work continues on dev branch
+
+# When ready to merge to main
+git checkout main
+git merge dev
+git checkout dev        # Always return to dev after merging
+```
+
+### Branch Workflow Rules
+
+1. **Default working branch**: `dev` (or `develop` if that's the convention)
+2. **After merging to main**: Always return to dev branch
+3. **Main branch**: Only updated via merge from dev, never directly
+4. **Feature branches**: Optional, can branch from dev for larger features
+
+## Commit Practices
+
+### Local Commits Only
+
+- **All commits are local by default**
+- Commit frequently to save work locally
+- Use descriptive commit messages
+- Never push unless explicitly requested
+
+### Commit Message Format
+
+```bash
+# Good: Descriptive, clear purpose
+git commit -m "Add user authentication module"
+
+# Better: More context
+git commit -m "Add user authentication with JWT tokens
+
+- Implement login endpoint
+- Add token validation middleware
+- Update user model with auth fields"
+```
+
+## GitHub Interaction Rules
+
+### ⚠️ CRITICAL: Never Auto-Push to GitHub
+
+**NEVER automatically push to GitHub unless the user explicitly requests it.**
+
+**Forbidden actions (unless explicitly requested):**
+- ❌ `git push` (any form)
+- ❌ `git push origin <branch>`
+- ❌ `git push --force`
+- ❌ `git push --all`
+- ❌ Any command that updates remote repository
+
+**Allowed actions:**
+- ✅ `git add`
+- ✅ `git commit` (local only)
+- ✅ `git status`
+- ✅ `git log`
+- ✅ `git diff`
+- ✅ `git branch`
+- ✅ `git checkout`
+- ✅ `git merge` (local branches only)
+
+### When User Requests GitHub Update
+
+Only when user explicitly says:
+- "Push to GitHub"
+- "Publish this branch"
+- "Commit to the cloud"
+- "Push to remote"
+- "Update GitHub"
+
+Then you can:
+```bash
+# Confirm which branch
+git push origin <branch-name>
+
+# Or if user specifies
+git push origin main
+git push origin dev
+```
+
+### Checking Remote Status
+
+You can check remote status, but don't push:
+
+```bash
+# Safe: Check what would be pushed
+git status
+git log origin/main..HEAD  # See commits not on remote
+
+# Safe: Fetch to see remote state (doesn't push)
+git fetch origin
+```
+
+## Recommended Workflow
+
+### Daily Development Workflow
+
+```bash
+# 1. Start work (always on dev branch)
+git checkout dev
+
+# 2. Make changes and commit locally
+git add .
+git commit -m "Work in progress: feature X"
+
+# 3. Continue working, commit frequently
+git add .
+git commit -m "Complete feature X implementation"
+
+# 4. When ready to merge to main
+git checkout main
+git merge dev
+git checkout dev  # Always return to dev
+
+# 5. Only push if user explicitly requests
+# (Wait for user to say "push to GitHub" or similar)
+```
+
+### Initial Repository Setup
+
+```bash
+# Create dev branch
+git checkout -b dev
+
+# Set up tracking (only if user requests)
+# git push -u origin dev
+```
+
+### After Merging to Main
+
+**Always return to dev branch:**
+
+```bash
+git checkout main
+git merge dev
+git checkout dev  # CRITICAL: Return to dev immediately
+```
+
+## Best Practices
+
+### 1. Branch Hygiene
+
+- Keep `main` branch stable and clean
+- Do all development on `dev` branch
+- Return to `dev` after any merge to `main`
+- Use feature branches for larger features (branch from `dev`)
+
+### 2. Commit Frequency
+
+- Commit often (saves work locally)
+- Small, focused commits are better than large ones
+- Commit messages should be clear and descriptive
+- Don't worry about "too many commits" - they're local
+
+### 3. Remote Interaction
+
+- **Default assumption**: All work is local
+- **Never assume** user wants to push to GitHub
+- **Always ask** or wait for explicit request before pushing
+- **Confirm branch** before pushing if user requests it
+
+### 4. Error Prevention
+
+- Check current branch before operations: `git branch`
+- Verify status before commits: `git status`
+- Check for uncommitted changes before switching branches
+- Never force push unless explicitly requested and understood
+
+### 5. User Communication
+
+When user might expect a push but hasn't requested it:
+
+> "I've committed your changes locally to the dev branch. Would you like me to push this to GitHub?"
+
+Or:
+
+> "Changes are committed locally. The dev branch is ready. Should I push it to GitHub?"
+
+## Anti-Patterns to Avoid
+
+- ❌ **Auto-pushing after commits** - Never push without explicit request
+- ❌ **Working directly on main** - Always use dev branch
+- ❌ **Forgetting to return to dev** - Always checkout dev after merging to main
+- ❌ **Force pushing without confirmation** - Dangerous, requires explicit request
+- ❌ **Assuming user wants to publish** - Always confirm before pushing
+
+## Example Scenarios
+
+### Scenario 1: User Makes Changes
+
+```bash
+# User: "Add a new feature"
+# You: Make changes, then:
+
+git checkout dev          # Ensure on dev branch
+git add .
+git commit -m "Add new feature X"
+# STOP HERE - Don't push unless requested
+```
+
+### Scenario 2: User Requests Push
+
+```bash
+# User: "Push this to GitHub"
+# You: 
+
+git push origin dev       # Push dev branch
+# Or confirm which branch user wants pushed
+```
+
+### Scenario 3: Merging to Main
+
+```bash
+# User: "Merge this to main"
+# You:
+
+git checkout main
+git merge dev
+git checkout dev          # CRITICAL: Return to dev
+# Don't push main unless user explicitly requests it
+```
+
+### Scenario 4: Starting Fresh Work Session
+
+```bash
+# Always start on dev branch
+git checkout dev
+git status                # Check current state
+# Begin work
+```
+
+## Git Configuration Recommendations
+
+For users, recommend these Git configs (but don't set them automatically):
+
+```bash
+# Prevent accidental pushes to main
+git config branch.main.pushRemote no_push
+
+# Set default branch to dev
+git config init.defaultBranch dev
+
+# Use merge (not rebase) for pulls
+git config pull.rebase false
+```
+
+## Summary Checklist
+
+Before any Git operation, ask:
+
+- [ ] Am I on the correct branch? (Should be `dev` for development)
+- [ ] Is this a local-only operation? (Most should be)
+- [ ] Did the user explicitly request pushing to GitHub? (If no, don't push)
+- [ ] After merging to main, did I return to dev? (Always return to dev)
+
+---
+
+**Remember**: Local commits are safe and encouraged. Remote pushes require explicit user request. Always work on dev branch, merge to main when ready, then return to dev.

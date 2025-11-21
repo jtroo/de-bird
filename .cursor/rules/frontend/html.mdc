@@ -1,0 +1,71 @@
+---
+globs: ["**/*.html", "**/*.htm"]
+description: HTML structure and best practices
+---
+
+# HTML Style Guide
+
+*This rule automatically attaches when working with HTML files.*
+
+## Structure
+
+- Use HTML5 semantic elements (`<header>`, `<nav>`, `<main>`, `<section>`, `<article>`, `<footer>`)
+- Maintain consistent indentation (2 or 4 spaces)
+- Use lowercase for all HTML tags and attributes
+- Always quote attribute values
+- Use self-closing tags for void elements (`<img />`, `<br />`, `<hr />`)
+
+## Script and Style Placement
+
+- **CSS**: In `<head>` section, prefer external files
+- **JavaScript**: At bottom of `<body>`, prefer external files
+- Use `defer` or `async` for non-blocking scripts when appropriate
+- Avoid inline JavaScript and CSS unless absolutely necessary
+
+## Accessibility
+
+- Always include `alt` attributes for images
+- Use proper heading hierarchy (`h1` → `h2` → `h3`)
+- Use semantic HTML for better screen reader support
+- Include ARIA labels when needed
+- Ensure keyboard navigation works
+
+## Template Integration
+
+- Keep HTML structure consistent across pages
+- Use consistent class naming (follow BEM or your chosen methodology)
+- Document template variables clearly
+- Separate content from presentation
+
+## Example Structure
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Page Title</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <!-- Header content -->
+  </header>
+  
+  <main>
+    <!-- Main content -->
+  </main>
+  
+  <footer>
+    <!-- Footer content -->
+  </footer>
+  
+  <script src="app.js"></script>
+</body>
+</html>
+```
+
+---
+
+*Customize this rule with your specific HTML preferences.*

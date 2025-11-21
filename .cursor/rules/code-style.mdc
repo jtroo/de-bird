@@ -1,0 +1,36 @@
+---
+description: Coding style and conventions guide
+globs: ["**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.py", "**/*.java", "**/*.go", "**/*.rs", "**/*.cpp", "**/*.c"]
+---
+
+# Code Style Guide
+
+*This rule is automatically attached when working with code files. Customize it with your specific coding style preferences.*
+
+## General Principles
+
+- Follow the style guide defined in `docs/STYLE_GUIDE.md`
+- Maintain consistency with existing code patterns
+- When in doubt, look at similar files in the codebase
+- Prefer clarity over cleverness
+
+## Before Writing Code
+
+1. Review existing similar files to understand patterns
+2. Check `docs/STYLE_GUIDE.md` for language-specific guidelines
+3. Ensure your code matches the project's naming conventions
+4. Follow the established error handling patterns
+5. Include appropriate comments and documentation
+
+## Code Review Checklist
+
+- [ ] Follows naming conventions
+- [ ] Matches formatting style
+- [ ] Includes appropriate error handling
+- [ ] Has necessary comments/documentation
+- [ ] Follows architectural patterns
+- [ ] Includes tests if applicable
+
+---
+
+*Customize this rule with your specific coding style requirements.*

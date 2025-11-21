@@ -1,0 +1,61 @@
+---
+description: Base rule coordinator - lightweight entry point that guides when to include other rules
+alwaysApply: true
+---
+
+# Base Rule Coordinator
+
+This is the lightweight entry point for all Cursor rules. It coordinates when to include other comprehensive rules to keep context minimal while maintaining full functionality.
+
+## Rule Loading Strategy
+
+Instead of loading all rules all the time, this base rule helps determine when to include specific rules based on context:
+
+### When to Include Rules
+
+**Include `get-started.mdc` when:**
+- First opening the repository
+- Reorienting yourself after time away
+- User asks about repository structure or conventions
+- Need to understand project organization
+
+**Include `distillation.mdc` when:**
+- Working on code simplification or refactoring
+- Discussing complexity reduction
+- Making architectural decisions
+- User mentions distillation, simplification, or reducing surface area
+- Creating new files or features (to apply distillation principles)
+
+**Include `rule-creation.mdc` when:**
+- Creating or modifying Cursor rules
+- User asks about rule syntax or structure
+- Need to understand nested rules or rule attachment modes
+- Writing `.mdc` files
+
+**Include `rule-learning.mdc` when:**
+- After solving a difficult problem that required multiple iterations
+- User mentions wanting to capture knowledge for future use
+- Proactively suggesting rule creation after complex problem-solving
+- When a solution pattern should be preserved
+
+## How to Reference Rules
+
+When you determine a rule should be included, you can reference it in your response:
+- "Based on the distillation principles in `distillation.mdc`..."
+- "Following the guidelines in `get-started.mdc`..."
+- Or simply apply the concepts from those rules
+
+The Cursor system will automatically include agent-requested rules when their descriptions match the context.
+
+## Core Principles (Always Available)
+
+Even without loading the full rules, these core principles should guide decisions:
+
+1. **Code Distillation**: Shrink surface area, specialize hot paths, remove optionality
+2. **Repository Orientation**: Understand structure before making changes
+3. **Rule Creation**: Capture knowledge from difficult problem-solving sessions
+4. **Rule Syntax**: Follow proper `.mdc` format with frontmatter
+
+---
+
+*This base rule keeps context minimal while ensuring comprehensive rules are available when needed.*

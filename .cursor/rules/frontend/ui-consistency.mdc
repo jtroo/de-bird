@@ -1,0 +1,119 @@
+---
+description: Frontend UI/UX consistency guidelines for web applications
+globs: ["**/*.html", "**/*.htm", "**/*.jinja", "**/*.jinja2", "**/*.j2"]
+alwaysApply: false
+---
+
+# Frontend UI/UX Consistency Guide
+
+*This rule ensures consistent UI/UX across all frontend code.*
+
+## Font Consistency
+
+- **Use a single font family** throughout the application
+- Define fonts in CSS, not inline styles
+- Use system font stack or a single web font (Google Fonts, etc.)
+- Avoid mixing multiple font families unless for specific design purposes
+- Document the primary font in the main CSS file
+
+## Emoji Usage
+
+- **Limit emoji usage** - Use sparingly and consistently
+- Prefer Font Awesome icons over emojis for UI elements
+- If using emojis, use them consistently (same emoji for same concept)
+- Avoid emojis in production UI unless part of the design system
+- Use semantic HTML and CSS for visual elements when possible
+
+## Icon Libraries
+
+- **Choose one icon library** and stick with it (Font Awesome, Material Icons, etc.)
+- Don't mix multiple icon libraries
+- Use icon libraries consistently (same style throughout)
+- Prefer icon libraries over emojis for UI elements
+
+## JavaScript Organization
+
+- **Avoid inline JavaScript** in HTML/Jinja templates
+- Place JavaScript in external files
+- Load JavaScript at the bottom of `<body>` or use `defer`/`async` attributes
+- Organize JavaScript by functionality (not all in one file)
+- Use modern ES6+ modules when possible
+- Document JavaScript includes and their purposes
+
+## CSS Organization
+
+- **Avoid inline styles** - Use external CSS files or `<style>` blocks in `<head>`
+- Organize CSS by component or page, not all in one file
+- Use CSS variables for consistent colors, spacing, fonts
+- Follow a CSS methodology (BEM, SMACSS, etc.) consistently
+- Document CSS structure and naming conventions
+
+## Template Consistency (Jinja/HTML)
+
+- Use consistent template structure across pages
+- Reuse components/templates when possible
+- Keep template logic minimal (move complex logic to backend)
+- Use consistent indentation and formatting
+- Document template variables and their purposes
+
+## Code Placement Standards
+
+### HTML Structure
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- CSS here -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Content here -->
+  
+  <!-- JavaScript at bottom -->
+  <script src="app.js"></script>
+</body>
+</html>
+```
+
+### Jinja Structure
+```jinja
+{% extends "base.html" %}
+{% block head %}
+  <!-- CSS here -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+{% endblock %}
+
+{% block content %}
+  <!-- Content here -->
+{% endblock %}
+
+{% block scripts %}
+  <!-- JavaScript at bottom -->
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}
+```
+
+## Anti-Patterns to Avoid
+
+- ❌ Mixing inline styles with external CSS
+- ❌ Inline JavaScript mixed with external scripts
+- ❌ Multiple font families without clear purpose
+- ❌ Excessive emoji usage
+- ❌ Mixing icon libraries
+- ❌ JavaScript in `<head>` (unless necessary with defer/async)
+- ❌ CSS conflicts from multiple sources without organization
+
+## Consistency Checklist
+
+Before committing frontend code, ensure:
+- [ ] Fonts are consistent across the page
+- [ ] No inline styles (or minimal, well-justified)
+- [ ] No inline JavaScript (or minimal, well-justified)
+- [ ] JavaScript loaded at bottom or with defer/async
+- [ ] CSS is organized and not conflicting
+- [ ] Icons/emojis used consistently
+- [ ] Template structure is consistent
+
+---
+
+*Customize this rule with your specific UI/UX preferences and design system.*

@@ -1,0 +1,367 @@
+---
+globs: ["**/*.py"]
+description: Python Flask application patterns and best practices
+---
+
+# Flask Style Guide
+
+*This rule automatically attaches when working with Python files and is available when Flask patterns are relevant.*
+
+**Frontend Integration**: All Flask frontend work should use HTML templates driven through Jinja2. See the frontend rules (`frontend/jinja.mdc`, `frontend/ui-consistency.mdc`, `frontend/html.mdc`, `frontend/css.mdc`, `frontend/javascript.mdc`) for consistent UI/UX patterns.
+
+## Application Structure
+
+- Use **Application Factory Pattern** (`create_app()`)
+- Organize routes using **Blueprints**
+- Separate configuration by environment (development, production, testing)
+
+## Directory Layout
+
+Follow this standard Flask directory structure:
+
+```
+project_root/
+├── app/
+│   ├── __init__.py          # Application factory (create_app())
+│   ├── config.py            # Configuration classes
+│   ├── models.py             # Database models (or models/ package)
+│   ├── routes/               # Route blueprints
+│   │   ├── __init__.py
+│   │   ├── main.py           # Main routes
+│   │   ├── auth.py           # Authentication routes
+│   │   └── api.py            # API routes
+│   ├── templates/            # Jinja2 templates
+│   │   ├── base.html         # Base template
+│   │   ├── index.html
+│   │   └── [feature]/       # Feature-specific templates
+│   ├── static/               # Static files
+│   │   ├── css/
+│   │   │   └── main.css
+│   │   ├── js/
+│   │   │   └── main.js
+│   │   └── images/
+│   ├── forms.py              # WTForms (if used)
+│   └── utils.py              # Utility functions
+├── migrations/               # Flask-Migrate database migrations
+├── tests/                   # Test files
+│   ├── __init__.py
+│   ├── test_routes.py
+│   └── test_models.py
+├── instance/                # Instance-specific files (git-ignored)
+│   └── config.py            # Local configuration overrides
+├── .env                     # Environment variables (git-ignored)
+├── requirements.txt         # Python dependencies
+└── run.py                   # Application entry point (development)
+```
+
+### Key Directory Rules
+
+- **`app/`** - Main application package (not `flask_app/` or `application/`)
+- **`app/templates/`** - All Jinja2 templates go here (Flask default)
+- **`app/static/`** - All static files (CSS, JS, images) organized by type
+- **`app/routes/`** - Organize routes by feature using Blueprints
+- **`migrations/`** - Database migrations (Flask-Migrate)
+- **`tests/`** - Test files mirror application structure
+- **`instance/`** - Instance-specific config (git-ignored, local overrides)
+
+### Template Directory Structure
+
+```
+app/templates/
+├── base.html                # Base template with common structure
+├── components/              # Reusable components
+│   ├── nav.html
+│   ├── footer.html
+│   └── forms/
+│       └── user_form.html
+├── pages/                   # Page-specific templates
+│   ├── index.html
+│   ├── about.html
+│   └── contact.html
+└── errors/                  # Error pages
+    ├── 404.html
+    └── 500.html
+```
+
+### Static Files Organization
+
+```
+app/static/
+├── css/
+│   ├── main.css            # Primary stylesheet
+│   ├── components.css       # Component-specific styles
+│   └── variables.css       # CSS variables
+├── js/
+│   ├── main.js             # Primary JavaScript
+│   └── components/         # Component-specific JS
+└── images/
+    ├── logos/
+    └── icons/
+```
+
+### Blueprint Organization
+
+```python
+# app/routes/main.py
+from flask import Blueprint
+
+main = Blueprint('main', __name__)
+
+@main.route('/')
+def index():
+    return render_template('pages/index.html')
+
+# app/routes/auth.py
+from flask import Blueprint
+
+auth = Blueprint('auth', __name__, url_prefix='/auth')
+
+@auth.route('/login')
+def login():
+    return render_template('pages/login.html')
+```
+
+## Route Organization
+
+```python
+# Good: Use Blueprints
+from flask import Blueprint
+
+api = Blueprint('api', __name__, url_prefix='/api')
+
+@api.route('/users')
+def get_users():
+    pass
+```
+
+## Database Patterns
+
+- Use **Flask-SQLAlchemy** for database models
+- Define models in separate `models.py` file
+- Use migrations with Flask-Migrate
+- Use database sessions properly (commit/rollback)
+
+## Configuration
+
+- Store sensitive data in environment variables
+- Use `Config` classes for different environments
+- Load from `.env` file in development (python-dotenv)
+- Control debug mode via `DEBUG` flag in config (not Flask's debug mode)
+
+### Configuration Example with Logging
+
+```python
+# app/config.py
+import os
+import logging
+import sys
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Config:
+    """Base configuration"""
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key'
+    DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    
+    @staticmethod
+    def setup_logging():
+        """Configure logging based on DEBUG flag"""
+        level = logging.DEBUG if Config.DEBUG else logging.INFO
+        
+        # Remove all handlers
+        root_logger = logging.getLogger()
+        root_logger.handlers = []
+        
+        # Create formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        
+        # Console handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(level)
+        console_handler.setFormatter(formatter)
+        
+        # Configure root logger
+        root_logger.setLevel(level)
+        root_logger.addHandler(console_handler)
+        
+        # Flask logger
+        flask_logger = logging.getLogger('flask')
+        flask_logger.setLevel(level)
+
+class DevelopmentConfig(Config):
+    DEBUG = True
+
+class ProductionConfig(Config):
+    DEBUG = False
+
+config = {
+    'development': DevelopmentConfig,
+    'production': ProductionConfig,
+    'default': DevelopmentConfig
+}
+```
+
+## Logging
+
+- **Always use the `logging` module** - Never use `print()` for debugging
+- Configure logging in `config.py` with `DEBUG` flag control
+- Use appropriate log levels: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+- Initialize logging in application factory based on config
+
+### Logging Setup in Application Factory
+
+```python
+# app/__init__.py
+from flask import Flask
+from app.config import config
+
+def create_app(config_name='default'):
+    app = Flask(__name__)
+    app.config.from_object(config[config_name])
+    
+    # Setup logging based on DEBUG flag
+    config[config_name].setup_logging()
+    
+    # Import and register blueprints
+    from app.routes.main import main
+    app.register_blueprint(main)
+    
+    return app
+```
+
+### Logging Usage in Routes
+
+```python
+# app/routes/main.py
+import logging
+from flask import Blueprint, render_template
+
+logger = logging.getLogger(__name__)
+main = Blueprint('main', __name__)
+
+@main.route('/')
+def index():
+    logger.info("Index page accessed")
+    try:
+        data = get_data()
+        logger.debug(f"Retrieved data: {data}")  # Only in debug mode
+        return render_template('pages/index.html', data=data)
+    except Exception as e:
+        logger.error(f"Error in index route: {e}")
+        return render_template('errors/500.html'), 500
+```
+
+### Logging Levels for Flask
+
+- **DEBUG**: Detailed request/response info, SQL queries (debug mode only)
+- **INFO**: Route access, important state changes
+- **WARNING**: Deprecated features, configuration issues
+- **ERROR**: Route errors, database errors, failed operations
+- **CRITICAL**: Application failures, security issues
+
+## Error Handling
+
+**Follow the Python error handling philosophy**: "Traps cost nothing, add them to the code."
+
+- **Trap errors where they occur** - Don't let errors propagate through multiple layers
+- Use Flask's error handlers for HTTP errors
+- Handle errors in routes, not in global handlers (unless truly global)
+- Return JSON responses for API endpoints
+- Log errors appropriately with context
+- Use proper HTTP status codes
+- Trap database errors, validation errors, and business logic errors at their source
+
+### Error Handling Pattern in Routes
+
+```python
+# app/routes/main.py
+import logging
+from flask import Blueprint, render_template, jsonify
+
+logger = logging.getLogger(__name__)
+main = Blueprint('main', __name__)
+
+@main.route('/users/<int:user_id>')
+def get_user(user_id):
+    logger.info(f"Fetching user {user_id}")
+    try:
+        user = User.query.get_or_404(user_id)  # Trap 404 here
+        logger.debug(f"User found: {user.username}")
+        return render_template('users/detail.html', user=user)
+    except ValueError as e:
+        logger.error(f"Invalid user_id format: {user_id} - {e}")
+        return render_template('errors/400.html'), 400
+    except Exception as e:
+        logger.critical(f"Unexpected error fetching user {user_id}: {e}")
+        return render_template('errors/500.html'), 500
+```
+
+## Frontend Templates
+
+- **Use Jinja2 templates** for all HTML rendering (no direct HTML strings in Python)
+- Follow Jinja template best practices (see `frontend/jinja.mdc`)
+- Maintain consistency between backend routes and frontend templates
+- Use template inheritance with base templates
+- Pass data to templates via `render_template()`, not inline HTML
+
+### Template Organization
+
+- Store templates in `app/templates/` directory (see Directory Layout above)
+- Use consistent template structure across routes
+- Organize templates by feature/route in `pages/` subdirectory
+- Reuse components via `{% include %}` from `components/` directory
+- Use `base.html` as the foundation for all templates
+- Place error pages in `errors/` subdirectory
+
+### Backend-Frontend Consistency
+
+- Route names should match template names when possible
+- Template variables should be clearly documented
+- Use `url_for()` for all internal links (maintains consistency)
+- Keep template logic minimal (handle complex logic in Python)
+- Follow UI consistency guidelines (see `frontend/ui-consistency.mdc`)
+
+### Example Route-Template Pattern
+
+```python
+# routes.py
+@app.route('/users')
+def users():
+    users = get_all_users()
+    return render_template('users.html', users=users, page_title='Users')
+```
+
+```jinja
+{# templates/users.html #}
+{% extends "base.html" %}
+{% block content %}
+  <h1>{{ page_title }}</h1>
+  {% for user in users %}
+    <div class="user-card">{{ user.name }}</div>
+  {% endfor %}
+{% endblock %}
+```
+
+## Testing
+
+- Use Flask's test client for integration tests
+- Mock external services
+- Use fixtures for test data
+- Test both success and error cases
+- Test template rendering with different data scenarios
+
+## Related Rules
+
+For frontend consistency, also refer to:
+- `frontend/jinja.mdc` - Jinja2 template best practices
+- `frontend/ui-consistency.mdc` - Overall UI/UX consistency
+- `frontend/html.mdc` - HTML structure standards
+- `frontend/css.mdc` - CSS organization
+- `frontend/javascript.mdc` - JavaScript organization
+
+---
+
+*Customize this rule with your specific Flask preferences and patterns.*

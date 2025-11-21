@@ -1,0 +1,113 @@
+---
+globs: ["**/*.jinja", "**/*.jinja2", "**/*.j2"]
+description: Jinja2 template best practices and patterns
+---
+
+# Jinja2 Template Style Guide
+
+*This rule automatically attaches when working with Jinja template files.*
+
+## Template Structure
+
+- Use template inheritance with `{% extends %}`
+- Organize templates with consistent block structure
+- Keep template logic minimal (move complex logic to backend)
+- Use consistent indentation (2 or 4 spaces)
+
+## Block Organization
+
+Use consistent block structure across templates:
+
+```jinja
+{% extends "base.html" %}
+
+{% block head %}
+  {# CSS and head content here #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+{% endblock %}
+
+{% block content %}
+  {# Main content here #}
+{% endblock %}
+
+{% block scripts %}
+  {# JavaScript at bottom #}
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}
+```
+
+## CSS and JavaScript in Jinja
+
+- **CSS**: In `{% block head %}` or `{% block styles %}`
+- **JavaScript**: In `{% block scripts %}` at the bottom
+- Use `url_for()` for static file paths
+- Avoid inline styles and scripts
+- Keep external files organized
+
+## Template Variables
+
+- Use descriptive variable names
+- Document template variables in comments
+- Use default values with `|default()` filter
+- Validate/sanitize data in backend, not templates
+
+## Includes and Macros
+
+- Use `{% include %}` for reusable components
+- Create macros for repeated patterns
+- Organize includes in a consistent directory structure
+- Document macro parameters
+
+## Filters and Functions
+
+- Use Jinja filters appropriately (`|safe`, `|escape`, etc.)
+- Create custom filters for complex logic
+- Keep filter usage consistent
+- Understand security implications of filters
+
+## Example Template
+
+```jinja
+{% extends "base.html" %}
+
+{% block title %}Page Title{% endblock %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='page.css') }}">
+{% endblock %}
+
+{% block content %}
+  <div class="container">
+    <h1>{{ page_title }}</h1>
+    {% include 'components/nav.html' %}
+    <!-- Content -->
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='page.js') }}"></script>
+{% endblock %}
+```
+
+## Best Practices
+
+- Keep templates DRY (Don't Repeat Yourself)
+- Use template inheritance consistently
+- Separate presentation from logic
+- Use includes for reusable components
+- Document template variables and their sources
+- Test templates with different data scenarios
+
+## Anti-Patterns
+
+- ❌ Complex logic in templates (move to backend)
+- ❌ Inline CSS/JavaScript in templates
+- ❌ Mixing template inheritance patterns
+- ❌ Unorganized block structure
+- ❌ Not using `url_for()` for static files
+
+---
+
+*Customize this rule with your specific Jinja/Flask template preferences.*

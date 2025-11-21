@@ -32,6 +32,39 @@ document.addEventListener('DOMContentLoaded', function() {
   setInterval(checkUSBStatus, 5000);
   document.getElementById("check_status").onclick = checkUSBStatus;
 
+  // ===== LED STATUS INDICATORS =====
+  async function updateLEDStatus() {
+    try {
+      const response = await fetch("/led_status");
+      const data = await response.json();
+      
+      if (data.ok) {
+        // Update each LED indicator
+        ['num_lock', 'caps_lock', 'scroll_lock'].forEach(led => {
+          const indicator = document.querySelector(`.led-indicator[data-led="${led}"]`);
+          if (indicator) {
+            const badge = indicator.querySelector('.led-badge');
+            const isOn = data[led];
+            
+            // Set state attribute for CSS
+            indicator.setAttribute('data-state', isOn ? 'on' : 'off');
+            
+            // Update badge text
+            if (badge) {
+              badge.textContent = isOn ? 'ON' : 'OFF';
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error("LED status check failed:", error);
+    }
+  }
+  
+  // Poll LED status every 500ms for real-time updates
+  updateLEDStatus();
+  setInterval(updateLEDStatus, 500);
+
   // ===== PASSTHROUGH TOGGLES =====
   async function setupToggle(toggleId, endpoint) {
     const toggle = document.getElementById(toggleId);

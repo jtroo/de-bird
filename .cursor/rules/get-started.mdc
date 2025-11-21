@@ -1,0 +1,57 @@
+---
+description: Repository orientation guide - read this when first opening the repo or when reorienting yourself
+---
+
+# Get Started - Repository Orientation
+
+When first opening this repository or when you need to reorient yourself, follow these steps:
+
+## Initial Repository Understanding
+
+1. **Read the entire repository structure** - Start by exploring the directory tree to understand the project organization
+2. **Understand Code Distillation** - Review `docs/essence.md`, `docs/method.md`, and `docs/tactics.md` - distillation is a core principle
+3. **Review all documentation files** - Read README.md, `docs/STYLE_GUIDE.md`, and any other documentation (note: `docs/` folder is git-ignored and contains LLM-specific and developer only documentation)
+4. **Examine code style files** - Look for configuration files like `.editorconfig`, `prettier.config.js`, `eslint.config.js`, `.clang-format`, `pyproject.toml`, etc.
+5. **Study example code** - Review existing code files to understand:
+   - Naming conventions (variables, functions, classes, files)
+   - Code organization patterns
+   - Comment styles and documentation approaches
+   - Error handling patterns
+   - Testing approaches
+6. **Understand the build system** - Review build scripts, package managers, and deployment processes
+7. **Check for conventions** - Look for patterns in:
+   - File structure
+   - Import/export styles
+   - API design patterns
+   - Database schemas
+   - Configuration management
+
+## Key Principles to Identify
+
+- **Code Distillation**: Core principle - shrink surface area, specialize hot paths, remove optionality
+- **Syntax preferences**: Language-specific conventions, formatting rules
+- **Architecture patterns**: How code is organized, separation of concerns
+- **Documentation style**: How code is documented, README format, API docs (all in `docs/`, git-ignored)
+- **Testing philosophy**: Unit tests, integration tests, test structure
+- **Deployment processes**: How code is built, tested, and deployed
+- **Tool preferences**: Linters, formatters, build tools, package managers
+
+## When to Reorient
+
+- After significant time away from the project
+- When encountering unfamiliar patterns
+- Before making major architectural decisions
+- When code reviews reveal style inconsistencies
+
+## Action Items
+
+Before writing or modifying code, ensure you understand:
+- The project's coding standards
+- The preferred architectural patterns
+- The documentation requirements
+- The testing requirements
+- The deployment process
+
+---
+
+*This is a template repository. Customize these rules to match your specific project needs and preferences.*

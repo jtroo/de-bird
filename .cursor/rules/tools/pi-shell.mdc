@@ -1,0 +1,607 @@
+---
+description: pi-shell CLI tool for interacting with Raspberry Pi devices over SSH
+globs: ["**/*.sh", "**/*.py", "**/Makefile", "**/*.mk"]
+---
+
+# pi-shell Tool Guide
+
+*This rule provides comprehensive guidance on using the `pi-shell` CLI tool for managing Raspberry Pi devices over SSH.*
+
+## Overview
+
+`pi-shell` is a command-line tool that provides a unified interface for interacting with multiple Raspberry Pi devices over SSH. It manages Pi configurations, supports both password and SSH key authentication, and provides commands for executing commands, reading/writing files, and transferring files.
+
+## Configuration
+
+### Configuration Location
+
+- **Config file**: `~/.config/pi-shell/config.yml` (per-user, isolated per user)
+- **SSH keys**: `~/.ssh/pi-shell` (generated automatically with `--push-key`)
+- Each user on the same machine has their own isolated configuration
+
+### Discovering Available Pis
+
+Before using a Pi, you need to know what Pis are configured:
+
+```bash
+# List all configured Pis with details
+pi-shell list
+
+# Check status of all Pis (online/offline)
+pi-shell status
+
+# Check status of specific Pi
+pi-shell status <pi_name>
+```
+
+**Important**: Pis are identified by **names** (like `keybird`, `pi1`, `pi4b`), not by IP addresses. Use `list` or `status` to see available Pi names.
+
+### Adding a New Pi
+
+Pis must be added to the configuration before use:
+
+```bash
+# Recommended: Add with SSH key authentication (password-less)
+pi-shell add <pi_name> --host <host_or_ip> --user <username> --password <password> --push-key
+
+# Alternative: Add with password authentication (password stored in config)
+pi-shell add <pi_name> --host <host_or_ip> --user <username> --password <password>
+```
+
+**Options:**
+- `--push-key` - Generates SSH key (if needed), pushes to Pi, enables password-less auth (recommended)
+- Without `--push-key` - Stores password in config (less secure but simpler)
+
+**Example:**
+```bash
+pi-shell add production --host 192.168.1.50 --user pi --password raspberry --push-key
+```
+
+### Symlinks
+
+When you add a Pi, `pi-shell` creates a symlink so you can use the Pi name directly as a command:
+
+```bash
+# After: pi-shell add keybird --host 192.168.1.10 --user pi --push-key
+# You can use:
+keybird run "hostname"  # Instead of: pi-shell run "hostname" --pi keybird
+```
+
+## Basic Syntax
+
+```bash
+pi-shell [--config CONFIG] <command> [options] [arguments]
+```
+
+### Global Options
+
+- `--config CONFIG` - Path to config file (default: `~/.config/pi-shell/config.yml`)
+- `-h, --help` - Show help message
+
+## Pi Selection
+
+The tool determines which Pi to use in this order of priority:
+
+1. **`--pi <name>` flag** (highest priority) - Explicitly specify Pi name
+2. **Symlink name** - If called via symlink (e.g., `keybird run "hostname"`)
+3. **Default Pi** - Set via `pi-shell set-default <name>`
+
+**Examples:**
+```bash
+pi-shell run "hostname" --pi keybird  # Explicitly specify keybird
+keybird run "hostname"                # Use symlink (auto-detects keybird)
+pi-shell run "hostname"               # Uses default Pi (if set)
+```
+
+### Common Pi Selection Options
+
+Most commands support these options:
+
+- `--pi PI` - Use a specific configured Pi by name (e.g., `keybird`, `pi4b`)
+- `--host HOST` - Override Pi hostname or IP address
+- `--user USER` - Override SSH username
+- `--password PASSWORD` - Override SSH password
+- `--key KEY` - Override path to SSH private key
+
+## Commands
+
+### 1. `run` - Execute Commands
+
+Run a command on the Pi and return output. **Use for quick, fast commands only.**
+
+```bash
+pi-shell run [--pi PI] <command>
+```
+
+**Examples:**
+```bash
+pi-shell run --pi keybird "hostname"
+pi-shell run --pi keybird "uname -a"
+pi-shell run --pi keybird "pwd"
+```
+
+**Use cases:**
+- Quick command execution (< 2 seconds)
+- One-off commands that return immediately
+- Commands that don't produce continuous output
+
+**⚠️ Important**: For commands that might hang, take time, or produce progress output, use `run-stream` instead.
+
+### 2. `run-stream` - Stream Command Output ⭐ CRITICAL
+
+**ALWAYS PREFER `run-stream` over `run`** for commands that might take time or produce progress output.
+
+```bash
+pi-shell run-stream [--pi PI] <command>
+```
+
+**Why it's critical:**
+- Provides real-time feedback during command execution
+- Shows progress for long-running operations
+- Prevents silent hangs - you see output as it happens
+- Essential for deployments, installs, builds, and any command >2 seconds
+
+**Examples:**
+```bash
+pi-shell run-stream --pi keybird "sudo apt update && sudo apt upgrade -y"
+pi-shell run-stream --pi keybird "tail -f /var/log/syslog"
+pi-shell run-stream --pi keybird "journalctl -f"
+pi-shell run-stream --pi keybird "mkdir -p /tmp/test && echo 'Created'"
+```
+
+**Use cases:**
+- Long-running commands (deployments, installs, builds)
+- Commands that produce continuous output
+- Commands where you want to see progress
+- Any command that takes >2 seconds
+- Commands that might hang (you'll see output instead of timeout)
+
+### 3. `read` - Read Files
+
+Read a file from the Pi. **Note**: This is for reading files, not executing commands.
+
+```bash
+pi-shell read [--pi PI] <file_path>
+```
+
+**Examples:**
+```bash
+pi-shell read --pi keybird "/etc/hostname"
+pi-shell read --pi keybird "/home/pi/.bashrc"
+pi-shell read --pi keybird "/etc/os-release"
+```
+
+**Use cases:**
+- Reading configuration files
+- Viewing log files
+- Inspecting remote files
+- Reading script output files
+
+### 4. `write` - Write Files
+
+Write content to a file on the Pi.
+
+```bash
+pi-shell write [--pi PI] <file_path> [content]
+```
+
+**Examples:**
+```bash
+# Write from argument
+pi-shell write --pi keybird "/tmp/test.txt" "Hello World"
+
+# Write from stdin
+echo "Content" | pi-shell write --pi keybird "/tmp/test.txt"
+cat local.txt | pi-shell write --pi keybird "/tmp/remote.txt"
+```
+
+**Use cases:**
+- Creating configuration files
+- Writing scripts remotely
+- Updating files
+- Creating temporary files
+
+### 5. `send` - Transfer Files
+
+Send a local file to the Pi.
+
+```bash
+pi-shell send [--pi PI] [--sudo] [--sudo-password PASSWORD] <local_path> [remote_path]
+```
+
+**Options:**
+- `--sudo` - Use sudo to move file to final destination
+- `--sudo-password PASSWORD` - Sudo password for remote user
+- `remote_path` - Optional if default path is set for the Pi
+
+**Examples:**
+```bash
+pi-shell send --pi keybird ./script.sh /home/pi/script.sh
+pi-shell send --pi keybird ./config.txt  # Uses default path if set
+pi-shell send --pi keybird --sudo ./service.conf /etc/service.conf
+```
+
+**Use cases:**
+- Deploying scripts
+- Transferring configuration files
+- Sending files that need sudo permissions
+- Uploading application files
+
+### 6. `list` - List Configured Pis
+
+List all configured Raspberry Pi devices.
+
+```bash
+pi-shell list
+```
+
+**Output shows:**
+- Name (use this in `--pi` flag)
+- Host (IP or hostname)
+- User (SSH username)
+- Default flag (which Pi is default)
+- Default path (for `send` command)
+
+**Use this to discover available Pi names before using them.**
+
+### 7. `status` - Check Pi Status
+
+Check online/offline status of configured Pis.
+
+```bash
+pi-shell status [name] [--timeout TIMEOUT]
+```
+
+**Options:**
+- `name` - Check specific Pi (optional, checks all if omitted)
+- `--timeout TIMEOUT` - Connection timeout in seconds (default: 3)
+
+**Examples:**
+```bash
+pi-shell status              # Check all Pis
+pi-shell status keybird      # Check specific Pi
+pi-shell status --timeout 5  # Use 5 second timeout
+```
+
+**Output shows:**
+- Name, Host, Hostname, Status (ONLINE/OFFLINE)
+
+**Always check status before running commands on a Pi.**
+
+### 8. `add` - Add New Pi
+
+Add a new Raspberry Pi to the configuration.
+
+```bash
+pi-shell add [--password PASSWORD] [--key KEY] [--push-key] [--timeout TIMEOUT] --host HOST --user USER <name>
+```
+
+**Required options:**
+- `--host HOST` - Hostname or IP address
+- `--user USER` - SSH username
+- `name` - Name for this Pi (used in `--pi` flag)
+
+**Optional options:**
+- `--password PASSWORD` - SSH password (stored in plain text if used without `--push-key`)
+- `--key KEY` - Path to SSH private key
+- `--push-key` - Generate and push SSH key for password-less auth (recommended)
+- `--timeout TIMEOUT` - Connection timeout for key push (default: 30)
+
+**Examples:**
+```bash
+# Recommended: Add with SSH key authentication
+pi-shell add mypi --host 192.168.1.100 --user pi --password raspberry --push-key
+
+# Add with existing SSH key
+pi-shell add mypi --host 192.168.1.100 --user pi --key ~/.ssh/id_rsa
+
+# Add with password only (less secure)
+pi-shell add mypi --host 192.168.1.100 --user pi --password raspberry
+```
+
+**After adding:**
+- Creates symlink so you can use `<name>` as a command
+- Saves configuration to `~/.config/pi-shell/config.yml`
+- With `--push-key`: Generates key at `~/.ssh/pi-shell` and enables password-less auth
+
+### 9. `remove` - Remove Pi
+
+Remove a Pi from the configuration.
+
+```bash
+pi-shell remove <name>
+```
+
+**Example:**
+```bash
+pi-shell remove oldpi
+```
+
+**Note:** Symlink is preserved for multi-user safety.
+
+### 10. `set-default` - Set Default Pi
+
+Set a Pi as the default (allows omitting `--pi` flag).
+
+```bash
+pi-shell set-default <name>
+```
+
+**Example:**
+```bash
+pi-shell set-default keybird
+# Now can use: pi-shell run "hostname" instead of pi-shell run --pi keybird "hostname"
+```
+
+### 11. `set-path` - Set Default Remote Path
+
+Set the default remote path for a Pi (used by `send` command when remote_path is omitted).
+
+```bash
+pi-shell set-path <name> <path>
+```
+
+**Example:**
+```bash
+pi-shell set-path keybird /home/pi/projects
+# Now: pi-shell send --pi keybird file.txt uses /home/pi/projects/file.txt
+```
+
+### 12. `check-ssh` - Check SSH Host Keys
+
+Check SSH host keys for all configured Pis and fix issues interactively.
+
+```bash
+pi-shell check-ssh
+```
+
+**Use when:**
+- You see "BadHostKeyException" errors
+- Pi's SSH key has changed (e.g., after OS reinstall)
+- Need to verify SSH connections
+
+## Best Practices
+
+### Command Selection
+
+- **Always prefer `run-stream` over `run`** for:
+  - Commands that take >2 seconds
+  - Long-running operations
+  - Commands that produce progress output
+  - Any command that might hang
+  - Deployments, installs, builds
+
+- **Use `run` only for:**
+  - Quick commands (< 2 seconds)
+  - Commands that return immediately
+  - Simple status checks
+
+### Pi Discovery and Selection
+
+- **Always check available Pis first:**
+  ```bash
+  pi-shell list    # See all configured Pis
+  pi-shell status  # Check which are online
+  ```
+
+- **Use explicit Pi names:**
+  - Don't assume Pi names - use `list` to discover them
+  - Use `--pi <name>` flag explicitly when possible
+  - Set default only for convenience, not for automation
+
+### File Operations
+
+- Use `send` for transferring files from local to remote
+- Use `write` for creating/updating files with content
+- Use `read` to inspect remote files before modifying
+- Check file paths and permissions
+
+### Security
+
+- **Prefer SSH key authentication** (`--push-key` when adding)
+- SSH keys eliminate password prompts (perfect for automation)
+- Use `--sudo` and `--sudo-password` only when necessary
+- Be careful with file paths and permissions
+- Passwords in config are stored in plain text (use keys when possible)
+
+### Error Handling
+
+- **Always check Pi status before operations:**
+  ```bash
+  pi-shell status <name>
+  ```
+
+- Handle offline Pis gracefully in scripts
+- Use appropriate timeouts for slow connections
+- Use `run-stream` to avoid silent hangs
+
+## Common Patterns
+
+### First-Time Setup
+
+```bash
+# Add a Pi with SSH key auth (recommended)
+pi-shell add pi1 --host 192.168.1.10 --user pi --password raspberry --push-key
+
+# Set as default
+pi-shell set-default pi1
+
+# Verify it works
+pi-shell status pi1
+pi-shell run --pi pi1 "hostname"
+```
+
+### Check Pi Availability
+
+```bash
+# List all Pis
+pi-shell list
+
+# Check if specific Pi is online
+pi-shell status keybird
+
+# Check all Pis
+pi-shell status
+```
+
+### Running Commands
+
+```bash
+# Quick command
+pi-shell run --pi keybird "uname -a"
+
+# Long-running command (PREFER run-stream)
+pi-shell run-stream --pi keybird "sudo apt update && sudo apt upgrade -y"
+
+# Using symlink
+keybird run-stream "tail -f /var/log/syslog"
+```
+
+### File Operations
+
+```bash
+# Read a file
+pi-shell read --pi keybird "/etc/hostname"
+
+# Write a file
+echo "content" | pi-shell write --pi keybird "/tmp/test.txt"
+
+# Send a file
+pi-shell send --pi keybird ./app.py /home/pi/app.py
+
+# Send with sudo
+pi-shell send --pi keybird --sudo ./config.conf /etc/app/config.conf
+```
+
+### Deploy Script to Pi
+
+```bash
+# Check Pi is online
+pi-shell status keybird
+
+# Create directory (use run-stream for feedback)
+pi-shell run-stream --pi keybird "mkdir -p /home/pi/myapp"
+
+# Send script
+pi-shell send --pi keybird ./deploy.sh /home/pi/myapp/deploy.sh
+
+# Make executable
+pi-shell run-stream --pi keybird "chmod +x /home/pi/myapp/deploy.sh"
+
+# Run script (use run-stream to see output)
+pi-shell run-stream --pi keybird "/home/pi/myapp/deploy.sh"
+```
+
+### Monitor Logs
+
+```bash
+pi-shell run-stream --pi keybird "tail -f /var/log/app.log"
+```
+
+### Clean Up Test Files
+
+```bash
+# Remove test directory
+pi-shell run-stream --pi keybird "rm -rf /tmp/test && echo 'Cleanup complete'"
+```
+
+## Integration with Scripts
+
+When using `pi-shell` in scripts:
+
+1. **Always check status first:**
+   ```bash
+   if pi-shell status keybird | grep -q "ONLINE"; then
+       # Proceed with operations
+   else
+       echo "Keybird is offline"
+       exit 1
+   fi
+   ```
+
+2. **Use `run-stream` for commands that might hang:**
+   ```bash
+   # Good: See output in real-time
+   pi-shell run-stream --pi keybird "long-running-command"
+   
+   # Bad: Might hang silently
+   pi-shell run --pi keybird "long-running-command"
+   ```
+
+3. **Handle offline devices gracefully:**
+   - Check status before operations
+   - Provide clear error messages
+   - Exit with appropriate codes
+
+4. **Log operations for debugging:**
+   - Use `run-stream` to see what's happening
+   - Capture output when needed
+   - Handle errors appropriately
+
+## Troubleshooting
+
+### Connection Errors
+
+```bash
+# Check if Pi is online
+pi-shell status <name>
+
+# Verify host IP is correct
+pi-shell list
+
+# Check SSH connection
+pi-shell check-ssh
+```
+
+### Host Key Errors
+
+If you see "BadHostKeyException":
+- Pi's SSH key has changed (e.g., after OS reinstall)
+- Run `pi-shell check-ssh` to fix interactively
+- Or manually: `ssh-keygen -R <host>`
+
+### Authentication Errors
+
+- If password prompts appear, Pi may not have SSH key configured
+- Re-add Pi with `--push-key` flag
+- Or provide `--key` option with path to SSH key
+
+### Silent Hangs
+
+- **Always use `run-stream`** for commands that might take time
+- `run-stream` provides real-time feedback
+- `run` may hang silently if command doesn't return quickly
+
+## Configuration File
+
+The tool uses a YAML configuration file at `~/.config/pi-shell/config.yml` that stores:
+- Pi names and connection details (host, user, password/key)
+- Default Pi settings
+- Default paths per Pi
+
+**Note:** 
+- Each user has their own config (isolated)
+- Passwords are stored in plain text (use SSH keys when possible)
+- Can be edited manually, but `add`/`remove` commands are recommended
+
+## Important Notes for LLMs
+
+1. **Always prefer `run-stream` over `run`** - Critical for seeing progress and avoiding silent hangs
+
+2. **Discover Pis first** - Use `list` or `status` to see available Pi names before using them
+
+3. **Pis are identified by names** - Not by IP addresses. Names like `keybird`, `pi1`, `pi4b` are configured via `add` command
+
+4. **Symlinks are convenient** - Once a Pi is added, you can use its name directly as a command (e.g., `keybird run "hostname"`)
+
+5. **SSH keys eliminate password prompts** - When using `--push-key`, all future operations are password-less and non-interactive (perfect for automation)
+
+6. **Each user has isolated config** - Multiple users on the same machine won't conflict
+
+7. **Check status before operations** - Always verify Pi is online before running commands
+
+8. **Use explicit Pi names** - Don't assume Pi names exist, discover them with `list` or `status`
+
+---
+
+*Customize this rule with project-specific pi-shell usage patterns and Pi names.*

@@ -1,0 +1,95 @@
+---
+description: Proactive rule creation and augmentation based on problem-solving sessions
+---
+
+# Rule Learning & Proactive Rule Creation
+
+When you've worked through a difficult problem with the user and found a solution, **proactively consider creating or updating a Cursor rule** to capture that knowledge for future use.
+
+## When to Create or Update Rules
+
+### Indicators That a Rule Should Be Created
+
+1. **Multiple iterations were needed** - The solution required several attempts or clarifications
+2. **Specific context was critical** - The solution depended on particular patterns, constraints, or preferences
+3. **The solution is reusable** - Similar problems are likely to occur again
+4. **Knowledge was hard-won** - The user had to explain or clarify multiple times
+5. **The solution involves project-specific patterns** - Not just general coding, but specific to this codebase or workflow
+
+### What to Capture in Rules
+
+- **The problem pattern** - What type of issue was being solved?
+- **The solution approach** - What was the successful method?
+- **Key constraints or preferences** - What made this solution work for this project?
+- **Common pitfalls to avoid** - What didn't work and why?
+- **Context requirements** - When does this rule apply?
+
+## Proactive Suggestions
+
+After solving a difficult problem, consider saying:
+
+> "That solution required several iterations. Would you like me to create a Cursor rule to capture this approach? This would help me solve similar problems faster in the future."
+
+Or:
+
+> "I notice we had to work through a few approaches before finding the right solution. Should I update the `[relevant-rule].mdc` file to include this pattern?"
+
+## Rule Creation Process
+
+When creating or updating a rule based on a problem-solving session:
+
+1. **Review existing rules** - Check if there's already a relevant rule that should be updated
+2. **Choose the right location**:
+   - Update existing rule if it's closely related
+   - Create new rule if it's a distinct concern
+   - Use nested rules if it's directory/feature-specific
+3. **Make it actionable** - Include:
+   - Clear problem description
+   - Solution approach
+   - Code examples if applicable
+   - When to apply this rule
+4. **Test the rule** - Ensure it would have helped solve the original problem faster
+
+## Examples of Rule-Worthy Solutions
+
+### Code Patterns
+- "We tried 3 different approaches to handle X, and the final solution was Y because of constraint Z"
+- "This project requires a specific pattern for handling errors that differs from standard practice"
+
+### Workflow Patterns
+- "The deployment process requires these specific steps in this order"
+- "This project uses a non-standard build configuration"
+
+### Project-Specific Constraints
+- "This codebase has a specific architecture that requires X pattern"
+- "Database migrations must follow this specific format"
+
+### Integration Patterns
+- "When integrating with service X, use approach Y because of limitation Z"
+
+## Anti-Patterns
+
+Don't create rules for:
+- One-off solutions that won't recur
+- General programming knowledge (unless project-specific)
+- Solutions that are already well-documented in existing rules
+- Temporary workarounds
+
+## Rule Maintenance
+
+When updating existing rules:
+- Preserve existing valuable content
+- Add new knowledge without removing old
+- Update examples if the approach has evolved
+- Note if this replaces an older pattern
+
+## Encouraging User Participation
+
+If the user seems hesitant about rule creation:
+- Explain the benefit: "This will help me remember this approach for next time"
+- Offer to draft it for review: "I can draft a rule and you can review/edit it"
+- Make it optional: "We can skip this if you prefer, but it might save time later"
+
+---
+
+**Remember**: The goal is to learn from difficult problem-solving sessions and encode that knowledge into rules, making future similar problems easier to solve. Be proactive but not pushy - suggest rule creation when it makes sense, but respect the user's preference.

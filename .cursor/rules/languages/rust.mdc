@@ -1,0 +1,54 @@
+---
+globs: ["**/*.rs"]
+description: Rust coding standards and conventions
+---
+
+# Rust Style Guide
+
+*This rule automatically attaches when working with Rust files.*
+
+## Naming Conventions
+
+- **Variables and functions**: `snake_case`
+- **Types and structs**: `PascalCase`
+- **Constants**: `SCREAMING_SNAKE_CASE`
+- **Lifetimes**: `'a`, `'b` (short, lowercase)
+- **Modules**: `snake_case`
+
+## Code Formatting
+
+- Use `rustfmt` for automatic formatting
+- Default to `rustfmt` settings (4 spaces, 100 char width)
+- Run `cargo fmt` before committing
+
+## Ownership and Borrowing
+
+- Prefer borrowing (`&T`) over owned values when possible
+- Use `&str` over `String` for function parameters when not modifying
+- Use `Cow<str>` when you need flexibility
+- Understand lifetime annotations
+
+## Error Handling
+
+- Use `Result<T, E>` for recoverable errors
+- Use `Option<T>` for nullable values
+- Prefer `?` operator over `match` for error propagation
+- Use custom error types with `thiserror` or `anyhow` for applications
+
+## Documentation
+
+- Use `///` for public API documentation
+- Use `//!` for module-level documentation
+- Include examples in doc comments
+- Document `unsafe` blocks thoroughly
+
+## Testing
+
+- Unit tests in same file with `#[cfg(test)]`
+- Integration tests in `tests/` directory
+- Use `#[test]` for test functions
+- Use `assert!`, `assert_eq!`, `assert_ne!` macros
+
+---
+
+*Customize this rule with your specific Rust preferences.*
