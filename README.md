@@ -1,4 +1,4 @@
-# Keybird v1.0.7
+# Keybird v1.0.8
 
 **Transform your Raspberry Pi into a professional USB keyboard, mouse, and media controller with web-based management.**
 
@@ -784,6 +784,7 @@ cd keybird/manual-deploy
 
 ## 🚀 Version History
 
+- **v1.0.8** (Nov 2025) - **Revert to File-Copying Deployment**: Restored original deployment approach for better workflow (edit locally, deploy to multiple Pis)
 - **v1.0.7** (Nov 2025) - **Editable Mappings & Modifier Support**: Auto-inject captured keys into editable table, inline editing of all mappings, modifier support (Ctrl+Alt+Shift+Win) for key combinations like Ctrl+Alt+Del
 - **v1.0.6** (Nov 2025) - **LED Control & Robustness**: Added LED forwarding (sync host lock keys to physical keyboards), real-time LED status indicators, clickable lock key toggles in GUI, and improved pass-through crash recovery
 - **v1.0.5** (Nov 2025) - **Listen Mode & Branding**: Added key listening mode for easy keyboard mapping, auto-start pass-through on boot, keyboard deduplication, favicon integration, and rebranded to "Keybird"
