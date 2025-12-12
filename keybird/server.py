@@ -680,7 +680,9 @@ if EVDEV_AVAILABLE:
                                         if mapping.get('type') == 'hid':
                                             # User mapped to specific HID code
                                             hid_code = mapping.get('hid_code')
+                                            modifiers = mapping.get('modifiers', 0)  # Get modifiers, default 0
                                             if hid_code:
+                                                ks.mod = modifiers  # Set modifiers before pressing
                                                 ks.press(hid_code)
                                                 hid.write(ks.report())
                                                 hid.flush()
@@ -698,8 +700,13 @@ if EVDEV_AVAILABLE:
                                     elif val == 0:  # Key up
                                         if mapping.get('type') == 'hid':
                                             hid_code = mapping.get('hid_code')
+                                            modifiers = mapping.get('modifiers', 0)
                                             if hid_code:
+                                                ks.mod = modifiers  # Keep modifiers during release
                                                 ks.release(hid_code)
+                                                # Clear modifiers after release
+                                                if not ks.keys:  # Only clear if no other keys pressed
+                                                    ks.mod = 0
                                                 hid.write(ks.report())
                                                 hid.flush()
                                     continue
@@ -1816,6 +1823,7 @@ def get_keyboard_mappings_detail(kbd_id):
             'key_name': key_name,
             'type': mapping.get('type'),
             'hid_code': mapping.get('hid_code'),
+            'modifiers': mapping.get('modifiers', 0),
             'text': mapping.get('text'),
             'description': get_mapping_description(mapping)
         })
@@ -1833,7 +1841,21 @@ def get_mapping_description(mapping):
         return "🚫 Suppressed (ignored)"
     elif mapping.get('type') == 'hid':
         hid_code = mapping.get('hid_code')
-        return f"→ HID 0x{hid_code:02X}" if hid_code else "→ HID (unknown)"
+        modifiers = mapping.get('modifiers', 0)
+        mod_str = ""
+        if modifiers:
+            mod_parts = []
+            if modifiers & 0x01: mod_parts.append("Ctrl")
+            if modifiers & 0x02: mod_parts.append("Shift")
+            if modifiers & 0x04: mod_parts.append("Alt")
+            if modifiers & 0x08: mod_parts.append("Win")
+            if modifiers & 0x10: mod_parts.append("RCtrl")
+            if modifiers & 0x20: mod_parts.append("RShift")
+            if modifiers & 0x40: mod_parts.append("RAlt")
+            if modifiers & 0x80: mod_parts.append("RWin")
+            if mod_parts:
+                mod_str = "+".join(mod_parts) + "+"
+        return f"→ {mod_str}HID 0x{hid_code:02X}" if hid_code else "→ HID (unknown)"
     elif mapping.get('type') == 'text':
         text = mapping.get('text', '')
         preview = text[:20] + '...' if len(text) > 20 else text
@@ -1884,7 +1906,8 @@ def add_keyboard_mapping(kbd_id):
         hid_code = data.get('hid_code')
         if not hid_code:
             return jsonify(ok=False, error="hid_code required for type=hid"), 400
-        mapping = {'type': 'hid', 'hid_code': int(hid_code)}
+        modifiers = data.get('modifiers', 0)  # Optional modifiers
+        mapping = {'type': 'hid', 'hid_code': int(hid_code), 'modifiers': int(modifiers)}
     elif mapping_type == 'text':
         text = data.get('text')
         if not text:
@@ -1897,6 +1920,46 @@ def add_keyboard_mapping(kbd_id):
     save_keyboard_mappings(keyboard_mappings)
     
     return jsonify(ok=True, message=f"Mapping added for code {code}")
+
+@app.route("/keyboard_mappings/<kbd_id>/mapping/<int:code>", methods=["PUT"])
+def update_keyboard_mapping(kbd_id, code):
+    """Update an existing mapping"""
+    global keyboard_mappings
+    
+    if kbd_id not in keyboard_mappings:
+        return jsonify(ok=False, error="Keyboard not found"), 404
+    
+    mappings = keyboard_mappings[kbd_id].get('custom_mappings', {})
+    if code not in mappings:
+        return jsonify(ok=False, error="Mapping not found"), 404
+    
+    data = request.json
+    mapping_type = data.get('type')
+    
+    if not mapping_type:
+        return jsonify(ok=False, error="type required"), 400
+    
+    # Create updated mapping based on type
+    if mapping_type == 'suppress':
+        mapping = {'type': 'suppress'}
+    elif mapping_type == 'hid':
+        hid_code = data.get('hid_code')
+        if not hid_code:
+            return jsonify(ok=False, error="hid_code required for type=hid"), 400
+        modifiers = data.get('modifiers', 0)
+        mapping = {'type': 'hid', 'hid_code': int(hid_code), 'modifiers': int(modifiers)}
+    elif mapping_type == 'text':
+        text = data.get('text')
+        if not text:
+            return jsonify(ok=False, error="text required for type=text"), 400
+        mapping = {'type': 'text', 'text': text}
+    else:
+        return jsonify(ok=False, error="Invalid type"), 400
+    
+    mappings[code] = mapping
+    save_keyboard_mappings(keyboard_mappings)
+    
+    return jsonify(ok=True, message=f"Mapping updated for code {code}")
 
 @app.route("/keyboard_mappings/<kbd_id>/mapping/<int:code>", methods=["DELETE"])
 def delete_keyboard_mapping(kbd_id, code):
