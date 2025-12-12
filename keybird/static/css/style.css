@@ -181,3 +181,44 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
+
+/* Modifier Checkboxes in Mappings Table */
+.modifier-checkboxes {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0.25rem 0;
+}
+
+.modifier-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.modifier-checkboxes .form-check-input {
+  margin-top: 0;
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+}
+
+.modifier-checkboxes .form-check-label {
+  font-size: 0.875rem;
+  color: #dee2e6;
+  user-select: none;
+}
+
+.modifier-checkboxes .form-check-input:checked {
+  background-color: #198754;
+  border-color: #198754;
+}
+
+/* Ensure modifier column is wide enough */
+#mappings_table td:nth-child(5) {
+  min-width: 200px;
+}
