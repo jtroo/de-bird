@@ -487,15 +487,71 @@ document.addEventListener('DOMContentLoaded', function() {
       
       const tbody = document.getElementById("mappings_tbody");
       if (data.mappings.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No mappings yet. Add one below!</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No mappings yet. Press "Listen for Key" to capture keys!</td></tr>';
       } else {
         tbody.innerHTML = '';
         data.mappings.forEach(mapping => {
           const row = tbody.insertRow();
+          row.setAttribute('data-code', mapping.code);
+          row.setAttribute('data-kbd-id', kbdId);
+          
+          const modifiers = mapping.modifiers || 0;
+          const ctrlChecked = (modifiers & 0x01) ? 'checked' : '';
+          const shiftChecked = (modifiers & 0x02) ? 'checked' : '';
+          const altChecked = (modifiers & 0x04) ? 'checked' : '';
+          const winChecked = (modifiers & 0x08) ? 'checked' : '';
+          
+          const hidCodeValue = mapping.hid_code ? `0x${mapping.hid_code.toString(16).toUpperCase().padStart(2, '0')}` : '';
+          const textValue = mapping.text || '';
+          
           row.innerHTML = `
             <td>${mapping.key_name}</td>
             <td>${mapping.code}</td>
-            <td>${mapping.description}</td>
+            <td>
+              <select class="form-select form-select-sm mapping-type" onchange="updateMappingType(${mapping.code}, '${kbdId}')">
+                <option value="suppress" ${mapping.type === 'suppress' ? 'selected' : ''}>🚫 Suppress</option>
+                <option value="hid" ${mapping.type === 'hid' ? 'selected' : ''}>→ HID Code</option>
+                <option value="text" ${mapping.type === 'text' ? 'selected' : ''}>→ Text</option>
+              </select>
+            </td>
+            <td>
+              <input type="text" class="form-control form-control-sm mapping-hid-code" 
+                     value="${hidCodeValue}" 
+                     placeholder="0x4C"
+                     onchange="updateMappingHID(${mapping.code}, '${kbdId}')"
+                     style="display: ${mapping.type === 'hid' ? 'block' : 'none'}">
+            </td>
+            <td>
+              <div class="modifier-checkboxes" style="display: ${mapping.type === 'hid' ? 'flex' : 'none'}; gap: 8px; flex-wrap: wrap;">
+                <label class="form-check-label small">
+                  <input type="checkbox" class="form-check-input modifier-checkbox" 
+                         data-mod="0x01" ${ctrlChecked}
+                         onchange="updateMappingModifiers(${mapping.code}, '${kbdId}')"> Ctrl
+                </label>
+                <label class="form-check-label small">
+                  <input type="checkbox" class="form-check-input modifier-checkbox" 
+                         data-mod="0x02" ${shiftChecked}
+                         onchange="updateMappingModifiers(${mapping.code}, '${kbdId}')"> Shift
+                </label>
+                <label class="form-check-label small">
+                  <input type="checkbox" class="form-check-input modifier-checkbox" 
+                         data-mod="0x04" ${altChecked}
+                         onchange="updateMappingModifiers(${mapping.code}, '${kbdId}')"> Alt
+                </label>
+                <label class="form-check-label small">
+                  <input type="checkbox" class="form-check-input modifier-checkbox" 
+                         data-mod="0x08" ${winChecked}
+                         onchange="updateMappingModifiers(${mapping.code}, '${kbdId}')"> Win
+                </label>
+              </div>
+            </td>
+            <td>
+              <input type="text" class="form-control form-control-sm mapping-text" 
+                     value="${textValue}" 
+                     placeholder="Enter text..."
+                     onchange="updateMappingText(${mapping.code}, '${kbdId}')"
+                     style="display: ${mapping.type === 'text' ? 'block' : 'none'}">
+            </td>
             <td class="text-center">
               <button class="btn btn-sm btn-danger" onclick="deleteMapping('${kbdId}', ${mapping.code})"><i class="bi bi-trash"></i></button>
             </td>
@@ -504,6 +560,152 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     } catch (error) {
       console.error("Load mappings error:", error);
+    }
+  }
+  
+  window.updateMappingType = async function(code, kbdId) {
+    const row = document.querySelector(`tr[data-code="${code}"][data-kbd-id="${kbdId}"]`);
+    if (!row) return;
+    
+    const typeSelect = row.querySelector('.mapping-type');
+    const type = typeSelect.value;
+    const hidInput = row.querySelector('.mapping-hid-code');
+    const textInput = row.querySelector('.mapping-text');
+    const modifierCheckboxes = row.querySelector('.modifier-checkboxes');
+    
+    // Show/hide relevant inputs
+    if (type === 'hid') {
+      hidInput.style.display = 'block';
+      modifierCheckboxes.style.display = 'flex';
+      textInput.style.display = 'none';
+    } else if (type === 'text') {
+      hidInput.style.display = 'none';
+      modifierCheckboxes.style.display = 'none';
+      textInput.style.display = 'block';
+    } else {
+      hidInput.style.display = 'none';
+      modifierCheckboxes.style.display = 'none';
+      textInput.style.display = 'none';
+    }
+    
+    // Update the mapping (preserve existing values)
+    await saveMappingUpdate(code, kbdId, type);
+  };
+  
+  window.updateMappingHID = async function(code, kbdId) {
+    const row = document.querySelector(`tr[data-code="${code}"][data-kbd-id="${kbdId}"]`);
+    if (!row) return;
+    
+    const hidInput = row.querySelector('.mapping-hid-code');
+    let hidCode = hidInput.value.trim();
+    
+    // Parse hex code
+    if (hidCode.startsWith('0x') || hidCode.startsWith('0X')) {
+      hidCode = hidCode.substring(2);
+    }
+    
+    const hidValue = parseInt(hidCode, 16);
+    if (isNaN(hidValue)) {
+      alert('Invalid HID code. Use hex format like 0x4C or 4C');
+      return;
+    }
+    
+    await saveMappingUpdate(code, kbdId, 'hid', hidValue);
+  };
+  
+  window.updateMappingText = async function(code, kbdId) {
+    const row = document.querySelector(`tr[data-code="${code}"][data-kbd-id="${kbdId}"]`);
+    if (!row) return;
+    
+    const textInput = row.querySelector('.mapping-text');
+    const text = textInput.value.trim();
+    
+    if (!text) {
+      alert('Text cannot be empty');
+      return;
+    }
+    
+    await saveMappingUpdate(code, kbdId, 'text', null, text);
+  };
+  
+  window.updateMappingModifiers = async function(code, kbdId) {
+    const row = document.querySelector(`tr[data-code="${code}"][data-kbd-id="${kbdId}"]`);
+    if (!row) return;
+    
+    const checkboxes = row.querySelectorAll('.modifier-checkbox');
+    let modifiers = 0;
+    
+    checkboxes.forEach(cb => {
+      if (cb.checked) {
+        modifiers |= parseInt(cb.getAttribute('data-mod'), 16);
+      }
+    });
+    
+    await saveMappingUpdate(code, kbdId, 'hid', null, null, modifiers);
+  };
+  
+  async function saveMappingUpdate(code, kbdId, type, hidCode = null, text = null, modifiers = null) {
+    // Get current mapping to preserve values
+    const row = document.querySelector(`tr[data-code="${code}"][data-kbd-id="${kbdId}"]`);
+    if (!row) return;
+    
+    let payload = {type: type};
+    
+    if (type === 'hid') {
+      if (hidCode === null) {
+        // Get from input
+        const hidInput = row.querySelector('.mapping-hid-code');
+        let hidStr = hidInput.value.trim();
+        if (!hidStr) {
+          alert('Please enter a HID code (e.g., 0x4C for Delete)');
+          return;
+        }
+        if (hidStr.startsWith('0x') || hidStr.startsWith('0X')) {
+          hidStr = hidStr.substring(2);
+        }
+        hidCode = parseInt(hidStr, 16);
+        if (isNaN(hidCode)) {
+          alert('Invalid HID code. Use hex format like 0x4C or 4C');
+          return;
+        }
+      }
+      payload.hid_code = hidCode;
+      
+      if (modifiers === null) {
+        // Get from checkboxes
+        const checkboxes = row.querySelectorAll('.modifier-checkbox');
+        modifiers = 0;
+        checkboxes.forEach(cb => {
+          if (cb.checked) {
+            modifiers |= parseInt(cb.getAttribute('data-mod'), 16);
+          }
+        });
+      }
+      payload.modifiers = modifiers;
+    } else if (type === 'text') {
+      if (text === null) {
+        const textInput = row.querySelector('.mapping-text');
+        text = textInput.value.trim();
+      }
+      payload.text = text;
+    }
+    
+    try {
+      const response = await fetch(`/keyboard_mappings/${encodeURIComponent(kbdId)}/mapping/${code}`, {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      
+      if (response.ok) {
+        // Reload to get updated description
+        await loadKeyboardMappings(kbdId);
+      } else {
+        alert("❌ " + data.error);
+      }
+    } catch (error) {
+      alert("❌ Error: " + error);
     }
   }
 
@@ -661,56 +863,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const newKey = data.keys[data.keys.length - 1];
         lastCapturedKeyCount = data.keys.length;
         
-        // Show mapping dialog
-        showKeyMappingDialog(newKey);
+        // Auto-inject into table with default "suppress" mapping
+        await autoInjectCapturedKey(newKey);
       }
     } catch (error) {
       console.error("Poll captured keys error:", error);
     }
   }
 
-  async function showKeyMappingDialog(capturedKey) {
-    // Stop listening temporarily while user decides
-    await stopListening();
+  async function autoInjectCapturedKey(capturedKey) {
+    if (!selectedKeyboardId) return;
     
-    const keyName = capturedKey.name || capturedKey.key_name || `Key_${capturedKey.code}`;
     const keyCode = capturedKey.code;
+    const keyName = capturedKey.name || capturedKey.key_name || `KEY_${keyCode}`;
     
-    // Ask what to do with this key
-    const action = prompt(
-      `Key captured: ${keyName} (code: ${keyCode})\n\n` +
-      `What would you like to do?\n` +
-      `1. Suppress (ignore this key)\n` +
-      `2. Map to HID code (enter hex code like 0x3A)\n` +
-      `3. Map to text (enter text string)\n` +
-      `4. Cancel\n\n` +
-      `Enter 1, 2, 3, or 4:`,
-      "1"
-    );
+    // Create default "suppress" mapping
+    const payload = {code: keyCode, type: 'suppress'};
     
-    if (!action || action === "4" || action.toLowerCase() === "cancel") {
-      return;
-    }
-    
-    let payload = {code: keyCode, type: null};
-    
-    if (action === "1" || action.toLowerCase() === "suppress") {
-      payload.type = 'suppress';
-    } else if (action === "2" || action.toLowerCase().includes("hid")) {
-      const hidCode = prompt(`Enter HID code in hex (e.g., 0x3A for Caps Lock):`, "");
-      if (!hidCode) return;
-      payload.type = 'hid';
-      payload.hid_code = parseInt(hidCode.replace('0x', ''), 16);
-    } else if (action === "3" || action.toLowerCase().includes("text")) {
-      const text = prompt(`Enter text to send when this key is pressed:`, "");
-      if (!text) return;
-      payload.type = 'text';
-      payload.text = text;
-    } else {
-      return;
-    }
-    
-    // Save the mapping
     try {
       const response = await fetch(`/keyboard_mappings/${encodeURIComponent(selectedKeyboardId)}/mapping`, {
         method: "POST",
@@ -720,15 +889,16 @@ document.addEventListener('DOMContentLoaded', function() {
       const data = await response.json();
       
       if (response.ok) {
-        alert("✅ " + data.message);
+        // Reload mappings to show the new entry
         await loadKeyboardMappings(selectedKeyboardId);
         // Clear captured keys
         await fetch("/keyboard_mappings/captured", {method: "DELETE"});
+        lastCapturedKeyCount = 0;
       } else {
-        alert("❌ " + data.error);
+        console.error("Failed to inject key:", data.error);
       }
     } catch (error) {
-      alert("❌ Error: " + error);
+      console.error("Error injecting key:", error);
     }
   }
 
