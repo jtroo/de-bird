@@ -461,7 +461,8 @@ document.addEventListener('DOMContentLoaded', function() {
       infoDiv.style.display = 'none';
       tableDiv.style.display = 'none';
       addDiv.style.display = 'none';
-      listenBtn.style.display = 'none';
+      listenBtn.disabled = true;
+      listenBtn.style.display = 'inline-block';
       stopBtn.style.display = 'none';
       document.getElementById("listening_status").style.display = 'none';
       stopListening();
@@ -471,6 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
     infoDiv.style.display = 'block';
     tableDiv.style.display = 'block';
     addDiv.style.display = 'block';
+    listenBtn.disabled = false;
     listenBtn.style.display = 'inline-block';
     
     await loadKeyboardMappings(selectedKeyboardId);
@@ -573,19 +575,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const textInput = row.querySelector('.mapping-text');
     const modifierCheckboxes = row.querySelector('.modifier-checkboxes');
     
+    if (!modifierCheckboxes) {
+      console.error('Modifier checkboxes container not found!');
+      return;
+    }
+    
     // Show/hide relevant inputs
     if (type === 'hid') {
-      hidInput.style.display = 'block';
-      modifierCheckboxes.style.display = 'flex';
-      textInput.style.display = 'none';
+      if (hidInput) hidInput.style.display = 'block';
+      if (modifierCheckboxes) {
+        modifierCheckboxes.style.display = 'flex';
+        modifierCheckboxes.style.visibility = 'visible';
+      }
+      if (textInput) textInput.style.display = 'none';
     } else if (type === 'text') {
-      hidInput.style.display = 'none';
-      modifierCheckboxes.style.display = 'none';
-      textInput.style.display = 'block';
+      if (hidInput) hidInput.style.display = 'none';
+      if (modifierCheckboxes) modifierCheckboxes.style.display = 'none';
+      if (textInput) textInput.style.display = 'block';
     } else {
-      hidInput.style.display = 'none';
-      modifierCheckboxes.style.display = 'none';
-      textInput.style.display = 'none';
+      if (hidInput) hidInput.style.display = 'none';
+      if (modifierCheckboxes) modifierCheckboxes.style.display = 'none';
+      if (textInput) textInput.style.display = 'none';
     }
     
     // Update the mapping (preserve existing values)
