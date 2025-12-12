@@ -479,6 +479,70 @@ document.addEventListener('DOMContentLoaded', function() {
     await checkListeningStatus();
   };
 
+  // HID Code to Human-Readable Name Mapping
+  const HID_CODE_NAMES = {
+    // Letters
+    0x04: 'A', 0x05: 'B', 0x06: 'C', 0x07: 'D', 0x08: 'E', 0x09: 'F', 0x0A: 'G',
+    0x0B: 'H', 0x0C: 'I', 0x0D: 'J', 0x0E: 'K', 0x0F: 'L', 0x10: 'M', 0x11: 'N',
+    0x12: 'O', 0x13: 'P', 0x14: 'Q', 0x15: 'R', 0x16: 'S', 0x17: 'T', 0x18: 'U',
+    0x19: 'V', 0x1A: 'W', 0x1B: 'X', 0x1C: 'Y', 0x1D: 'Z',
+    // Numbers
+    0x1E: '1', 0x1F: '2', 0x20: '3', 0x21: '4', 0x22: '5', 0x23: '6',
+    0x24: '7', 0x25: '8', 0x26: '9', 0x27: '0',
+    // Special keys
+    0x28: 'Enter', 0x29: 'Escape (ESC)', 0x2A: 'Backspace', 0x2B: 'Tab', 0x2C: 'Space',
+    // Punctuation
+    0x2D: 'Minus (-)', 0x2E: 'Equal (=)', 0x2F: 'Left Bracket ([)', 0x30: 'Right Bracket (])',
+    0x31: 'Backslash (\\)', 0x33: 'Semicolon (;)', 0x34: 'Apostrophe (\')', 0x35: 'Grave (`)',
+    0x36: 'Comma (,)', 0x37: 'Period (.)', 0x38: 'Slash (/)',
+    // Lock keys
+    0x39: 'Caps Lock', 0x53: 'Num Lock', 0x47: 'Scroll Lock',
+    // Function keys
+    0x3A: 'F1', 0x3B: 'F2', 0x3C: 'F3', 0x3D: 'F4', 0x3E: 'F5', 0x3F: 'F6',
+    0x40: 'F7', 0x41: 'F8', 0x42: 'F9', 0x43: 'F10', 0x44: 'F11', 0x45: 'F12',
+    // Navigation
+    0x46: 'Print Screen (SysRq)', 0x48: 'Pause', 0x49: 'Insert', 0x4A: 'Home',
+    0x4B: 'Page Up', 0x4C: 'Delete', 0x4D: 'End', 0x4E: 'Page Down',
+    // Arrow keys
+    0x4F: 'Right Arrow', 0x50: 'Left Arrow', 0x51: 'Down Arrow', 0x52: 'Up Arrow',
+    // Keypad
+    0x54: 'Keypad /', 0x55: 'Keypad *', 0x56: 'Keypad -', 0x57: 'Keypad +',
+    0x58: 'Keypad Enter', 0x59: 'Keypad 1', 0x5A: 'Keypad 2', 0x5B: 'Keypad 3',
+    0x5C: 'Keypad 4', 0x5D: 'Keypad 5', 0x5E: 'Keypad 6', 0x5F: 'Keypad 7',
+    0x60: 'Keypad 8', 0x61: 'Keypad 9', 0x62: 'Keypad 0', 0x63: 'Keypad .',
+    0x67: 'Keypad =',
+    // Additional function keys
+    0x68: 'F13', 0x69: 'F14', 0x6A: 'F15', 0x6B: 'F16', 0x6C: 'F17', 0x6D: 'F18',
+    0x6E: 'F19', 0x6F: 'F20', 0x70: 'F21', 0x71: 'F22', 0x72: 'F23', 0x73: 'F24',
+    // Other
+    0x64: 'Non-US Backslash', 0x65: 'Application/Menu', 0x66: 'Power/Sleep',
+    0x85: 'Keypad Comma', 0x87: 'International 1', 0x88: 'International 2',
+    0x89: 'International 3', 0x90: 'International 4', 0x91: 'International 5'
+  };
+
+  function getHIDCodeName(code) {
+    return HID_CODE_NAMES[code] || `0x${code.toString(16).toUpperCase().padStart(2, '0')}`;
+  }
+
+  function generateHIDCodeOptions() {
+    const codes = Object.keys(HID_CODE_NAMES).map(Number).sort((a, b) => a - b);
+    return codes.map(code => {
+      const name = HID_CODE_NAMES[code];
+      const hex = `0x${code.toString(16).toUpperCase().padStart(2, '0')}`;
+      return `<option value="${hex}">${name} (${hex})</option>`;
+    }).join('');
+  }
+
+  function generateHIDCodeOptionsWithSelection(selectedValue) {
+    const codes = Object.keys(HID_CODE_NAMES).map(Number).sort((a, b) => a - b);
+    return codes.map(code => {
+      const name = HID_CODE_NAMES[code];
+      const hex = `0x${code.toString(16).toUpperCase().padStart(2, '0')}`;
+      const selected = hex === selectedValue ? ' selected' : '';
+      return `<option value="${hex}"${selected}>${name} (${hex})</option>`;
+    }).join('');
+  }
+
   async function loadKeyboardMappings(kbdId) {
     try {
       const response = await fetch(`/keyboard_mappings/${encodeURIComponent(kbdId)}`);
@@ -505,6 +569,8 @@ document.addEventListener('DOMContentLoaded', function() {
           
           const hidCodeValue = mapping.hid_code ? `0x${mapping.hid_code.toString(16).toUpperCase().padStart(2, '0')}` : '';
           const textValue = mapping.text || '';
+          const hidCodeNum = mapping.hid_code ? parseInt(mapping.hid_code) : null;
+          const hasKnownHIDCode = hidCodeNum !== null && HID_CODE_NAMES[hidCodeNum];
           
           row.innerHTML = `
             <td>${mapping.key_name}</td>
@@ -517,11 +583,20 @@ document.addEventListener('DOMContentLoaded', function() {
               </select>
             </td>
             <td>
-              <input type="text" class="form-control form-control-sm mapping-hid-code" 
-                     value="${hidCodeValue}" 
-                     placeholder="0x4C"
-                     onchange="updateMappingHID(${mapping.code}, '${kbdId}')"
-                     style="display: ${mapping.type === 'hid' ? 'block' : 'none'}">
+              <div class="hid-code-selector" style="display: ${mapping.type === 'hid' ? 'block' : 'none'}">
+                <select class="form-select form-select-sm mapping-hid-code-select" 
+                        onchange="handleHIDCodeSelect(${mapping.code}, '${kbdId}', this.value)"
+                        style="display: ${hasKnownHIDCode || !hidCodeValue ? 'block' : 'none'};">
+                  <option value="">Select HID Code...</option>
+                  ${generateHIDCodeOptionsWithSelection(hidCodeValue)}
+                  <option value="__CUSTOM__">Custom (type hex code)...</option>
+                </select>
+                <input type="text" class="form-control form-control-sm mapping-hid-code-custom" 
+                       value="${!hasKnownHIDCode && hidCodeValue ? hidCodeValue : ''}" 
+                       placeholder="0x4C"
+                       onchange="updateMappingHID(${mapping.code}, '${kbdId}')"
+                       style="display: ${!hasKnownHIDCode && hidCodeValue ? 'block' : 'none'}; margin-top: 4px;">
+              </div>
             </td>
             <td>
               <div class="modifier-checkboxes" style="display: ${mapping.type === 'hid' ? 'flex' : 'none'}; gap: 8px; flex-wrap: wrap;">
@@ -571,7 +646,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const typeSelect = row.querySelector('.mapping-type');
     const type = typeSelect.value;
-    const hidInput = row.querySelector('.mapping-hid-code');
+    const hidSelector = row.querySelector('.hid-code-selector');
     const textInput = row.querySelector('.mapping-text');
     const modifierCheckboxes = row.querySelector('.modifier-checkboxes');
     
@@ -582,18 +657,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Show/hide relevant inputs
     if (type === 'hid') {
-      if (hidInput) hidInput.style.display = 'block';
+      if (hidSelector) {
+        hidSelector.style.display = 'block';
+        // Show select dropdown, hide custom input
+        const select = hidSelector.querySelector('.mapping-hid-code-select');
+        const customInput = hidSelector.querySelector('.mapping-hid-code-custom');
+        if (select) select.style.display = 'block';
+        if (customInput) customInput.style.display = 'none';
+      }
       if (modifierCheckboxes) {
         modifierCheckboxes.style.display = 'flex';
         modifierCheckboxes.style.visibility = 'visible';
       }
       if (textInput) textInput.style.display = 'none';
     } else if (type === 'text') {
-      if (hidInput) hidInput.style.display = 'none';
+      if (hidSelector) hidSelector.style.display = 'none';
       if (modifierCheckboxes) modifierCheckboxes.style.display = 'none';
       if (textInput) textInput.style.display = 'block';
     } else {
-      if (hidInput) hidInput.style.display = 'none';
+      if (hidSelector) hidSelector.style.display = 'none';
       if (modifierCheckboxes) modifierCheckboxes.style.display = 'none';
       if (textInput) textInput.style.display = 'none';
     }
@@ -602,12 +684,36 @@ document.addEventListener('DOMContentLoaded', function() {
     await saveMappingUpdate(code, kbdId, type);
   };
   
+  window.handleHIDCodeSelect = function(code, kbdId, value) {
+    const row = document.querySelector(`tr[data-code="${code}"][data-kbd-id="${kbdId}"]`);
+    if (!row) return;
+    
+    const select = row.querySelector('.mapping-hid-code-select');
+    const customInput = row.querySelector('.mapping-hid-code-custom');
+    
+    if (value === '__CUSTOM__') {
+      // Show custom input, hide select
+      select.style.display = 'none';
+      customInput.style.display = 'block';
+      customInput.focus();
+    } else if (value) {
+      // Parse and save the selected value
+      let hidCode = value.replace('0x', '').replace('0X', '');
+      const hidValue = parseInt(hidCode, 16);
+      if (!isNaN(hidValue)) {
+        saveMappingUpdate(code, kbdId, 'hid', hidValue);
+      }
+    }
+  };
+  
   window.updateMappingHID = async function(code, kbdId) {
     const row = document.querySelector(`tr[data-code="${code}"][data-kbd-id="${kbdId}"]`);
     if (!row) return;
     
-    const hidInput = row.querySelector('.mapping-hid-code');
-    let hidCode = hidInput.value.trim();
+    const customInput = row.querySelector('.mapping-hid-code-custom');
+    if (!customInput) return;
+    
+    let hidCode = customInput.value.trim();
     
     // Parse hex code
     if (hidCode.startsWith('0x') || hidCode.startsWith('0X')) {
@@ -663,13 +769,24 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (type === 'hid') {
       if (hidCode === null) {
-        // Get from input
-        const hidInput = row.querySelector('.mapping-hid-code');
-        let hidStr = hidInput.value.trim();
+        // Get from select or custom input
+        const select = row.querySelector('.mapping-hid-code-select');
+        const customInput = row.querySelector('.mapping-hid-code-custom');
+        
+        let hidStr = '';
+        if (customInput && customInput.style.display !== 'none') {
+          // Using custom input
+          hidStr = customInput.value.trim();
+        } else if (select && select.value && select.value !== '__CUSTOM__') {
+          // Using select dropdown
+          hidStr = select.value;
+        }
+        
         if (!hidStr) {
-          alert('Please enter a HID code (e.g., 0x4C for Delete)');
+          alert('Please enter or select a HID code');
           return;
         }
+        
         if (hidStr.startsWith('0x') || hidStr.startsWith('0X')) {
           hidStr = hidStr.substring(2);
         }
