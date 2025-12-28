@@ -809,6 +809,39 @@ if EVDEV_AVAILABLE:
                     continue
                 
                 with open(HID_MOUSE_PATH, "wb", buffering=0) as hid_mouse:
+                    # Accumulation variables for movement coalescing
+                    dx_total = 0
+                    dy_total = 0
+                    wheel_total = 0
+                    
+                    def _flush_mouse_movement():
+                        """Flush accumulated movement values to HID device"""
+                        nonlocal dx_total, dy_total, wheel_total
+                        
+                        # Clamp to int8 range (-127 to 127)
+                        dx_sent = max(-127, min(127, dx_total))
+                        dy_sent = max(-127, min(127, dy_total))
+                        wheel_sent = max(-127, min(127, wheel_total))
+                        
+                        # Only send if there's movement to send
+                        if dx_sent == 0 and dy_sent == 0 and wheel_sent == 0:
+                            return
+                        
+                        # Convert to unsigned bytes
+                        dx_byte = dx_sent if dx_sent >= 0 else (256 + dx_sent)
+                        dy_byte = dy_sent if dy_sent >= 0 else (256 + dy_sent)
+                        wheel_byte = wheel_sent if wheel_sent >= 0 else (256 + wheel_sent)
+                        
+                        # Send report
+                        report = bytes([buttons_state, dx_byte, dy_byte, wheel_byte])
+                        hid_mouse.write(report)
+                        hid_mouse.flush()
+                        
+                        # Keep remainder (for overflow handling)
+                        dx_total -= dx_sent
+                        dy_total -= dy_sent
+                        wheel_total -= wheel_sent
+                    
                     while MOUSE_PASSTHROUGH_ENABLED:
                         # Monitor all mouse file descriptors
                         fds = [m.fd for m in mice]
@@ -823,68 +856,61 @@ if EVDEV_AVAILABLE:
                             for ev in dev.read():
                                 if not MOUSE_PASSTHROUGH_ENABLED:
                                     break
-                            
-                            # Handle button events
-                            if ev.type == ecodes.EV_KEY:
-                                if ev.code == ecodes.BTN_LEFT:
-                                    if ev.value == 1:
-                                        buttons_state |= 1
-                                        # Check if in calibration mode
+                                
+                                # Handle button events
+                                if ev.type == ecodes.EV_KEY:
+                                    # Flush accumulated movements before button state change
+                                    _flush_mouse_movement()
+                                    
+                                    if ev.code == ecodes.BTN_LEFT:
+                                        if ev.value == 1:
+                                            buttons_state |= 1
+                                            # Check if in calibration mode
+                                            with calibration_lock:
+                                                if calibration_state['active']:
+                                                    # Record this position
+                                                    calibration_state['points'].append({
+                                                        'x': calibration_state['current_x'],
+                                                        'y': calibration_state['current_y']
+                                                    })
+                                                    calibration_state['step'] += 1
+                                                    print(f"🎯 Calibration point {calibration_state['step']}: ({calibration_state['current_x']}, {calibration_state['current_y']})", flush=True)
+                                        else:
+                                            buttons_state &= ~1
+                                    elif ev.code == ecodes.BTN_RIGHT:
+                                        if ev.value == 1:
+                                            buttons_state |= 2
+                                        else:
+                                            buttons_state &= ~2
+                                    elif ev.code == ecodes.BTN_MIDDLE:
+                                        if ev.value == 1:
+                                            buttons_state |= 4
+                                        else:
+                                            buttons_state &= ~4
+                                    
+                                    # Send button state change immediately (with zero movement)
+                                    report = bytes([buttons_state, 0, 0, 0])
+                                    hid_mouse.write(report)
+                                    hid_mouse.flush()
+                                
+                                # Handle movement events
+                                elif ev.type == ecodes.EV_REL:
+                                    # Accumulate movement values (don't clamp yet - need full value for calibration)
+                                    if ev.code == ecodes.REL_X:
+                                        dx_total += ev.value
+                                        # Track position for calibration (use full ev.value, not clamped)
                                         with calibration_lock:
-                                            if calibration_state['active']:
-                                                # Record this position
-                                                calibration_state['points'].append({
-                                                    'x': calibration_state['current_x'],
-                                                    'y': calibration_state['current_y']
-                                                })
-                                                calibration_state['step'] += 1
-                                                print(f"🎯 Calibration point {calibration_state['step']}: ({calibration_state['current_x']}, {calibration_state['current_y']})", flush=True)
-                                    else:
-                                        buttons_state &= ~1
-                                elif ev.code == ecodes.BTN_RIGHT:
-                                    if ev.value == 1:
-                                        buttons_state |= 2
-                                    else:
-                                        buttons_state &= ~2
-                                elif ev.code == ecodes.BTN_MIDDLE:
-                                    if ev.value == 1:
-                                        buttons_state |= 4
-                                    else:
-                                        buttons_state &= ~4
-                                
-                                # Send button state change immediately
-                                report = bytes([buttons_state, 0, 0, 0])
-                                hid_mouse.write(report)
-                                hid_mouse.flush()
+                                            calibration_state['current_x'] += ev.value
+                                    elif ev.code == ecodes.REL_Y:
+                                        dy_total += ev.value
+                                        # Track position for calibration (use full ev.value, not clamped)
+                                        with calibration_lock:
+                                            calibration_state['current_y'] += ev.value
+                                    elif ev.code == ecodes.REL_WHEEL:
+                                        wheel_total += ev.value
                             
-                            # Handle movement events
-                            elif ev.type == ecodes.EV_REL:
-                                dx = 0
-                                dy = 0
-                                wheel = 0
-                                
-                                if ev.code == ecodes.REL_X:
-                                    dx = max(-127, min(127, ev.value))
-                                    # Track position for calibration
-                                    with calibration_lock:
-                                        calibration_state['current_x'] += ev.value
-                                elif ev.code == ecodes.REL_Y:
-                                    dy = max(-127, min(127, ev.value))
-                                    # Track position for calibration
-                                    with calibration_lock:
-                                        calibration_state['current_y'] += ev.value
-                                elif ev.code == ecodes.REL_WHEEL:
-                                    wheel = max(-127, min(127, ev.value))
-                                
-                                # Convert to unsigned bytes
-                                dx_byte = dx if dx >= 0 else (256 + dx)
-                                dy_byte = dy if dy >= 0 else (256 + dy)
-                                wheel_byte = wheel if wheel >= 0 else (256 + wheel)
-                                
-                                # Send movement
-                                report = bytes([buttons_state, dx_byte, dy_byte, wheel_byte])
-                                hid_mouse.write(report)
-                                hid_mouse.flush()
+                            # After processing all events from this device, flush any accumulated movements
+                            _flush_mouse_movement()
                 
                 # If we exit the with block normally, break the retry loop
                 break
