@@ -27,7 +27,25 @@ def check_pi_exists(pi_name):
 
 
 def get_package_file(filename):
-    """Get path to a file in the installed package"""
+    """Get path to a file in the package, preferring source files over installed package"""
+    # Strategy: Prefer source files for development workflow
+    # 1. Check script's directory (works when running from source)
+    script_dir = Path(__file__).parent.absolute()
+    source_path = script_dir / filename
+    if source_path.exists():
+        return str(source_path)
+    
+    # 2. Check current working directory for source files (for development)
+    # This handles the case where keybird-deploy is installed but we're in the project directory
+    cwd = Path.cwd()
+    # Look for keybird/ subdirectory in current directory or parent
+    for search_dir in [cwd, cwd.parent]:
+        keybird_dir = search_dir / 'keybird'
+        source_path = keybird_dir / filename
+        if source_path.exists():
+            return str(source_path)
+    
+    # 3. Fallback: use installed package files
     try:
         # Use importlib.resources for modern Python 3.10+
         if hasattr(resources, 'files'):
@@ -37,7 +55,9 @@ def get_package_file(filename):
             # Fallback for older versions (though we require 3.10+)
             return str(resources.path('keybird', filename))
     except Exception as e:
-        print(f"❌ Error: Could not find package file '{filename}': {e}")
+        print(f"❌ Error: Could not find package file '{filename}'")
+        print(f"   Tried source paths: {script_dir / filename}, {cwd / 'keybird' / filename}")
+        print(f"   Resource error: {e}")
         sys.exit(1)
 
 

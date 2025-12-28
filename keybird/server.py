@@ -191,13 +191,14 @@ def send_text_as_keys(text):
                 tap_key(hid, mods, kc)
 
 # --------------- Pass-through Mode --------------------
-PASSTHROUGH_ENABLED = False
+# CRITICAL: Initialize to True if evdev is available (pass-through should always be on by default)
+PASSTHROUGH_ENABLED = EVDEV_AVAILABLE
 passthrough_thread = None
 
-MOUSE_PASSTHROUGH_ENABLED = False
+MOUSE_PASSTHROUGH_ENABLED = EVDEV_AVAILABLE
 mouse_passthrough_thread = None
 
-LED_FORWARDING_ENABLED = False
+LED_FORWARDING_ENABLED = EVDEV_AVAILABLE
 led_forwarding_thread = None
 
 # Current LED state from host (updated by LED forwarding thread)
