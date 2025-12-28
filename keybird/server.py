@@ -571,17 +571,13 @@ if EVDEV_AVAILABLE:
         ks = KeyState()
         print(f"✅ Pass-through mode ACTIVE - monitoring {len(keyboards)} keyboard(s)", flush=True)
         
-        # Retry loop for device availability
-        retry_count = 0
-        max_retries = 5
-        
-        while PASSTHROUGH_ENABLED and retry_count < max_retries:
+        # Retry loop for device availability - keep retrying forever while enabled
+        while PASSTHROUGH_ENABLED:
             try:
                 # Check if HID device exists before opening
                 if not os.path.exists(HID_PATH):
                     print(f"⚠️  {HID_PATH} not available, waiting...", flush=True)
                     time.sleep(2)
-                    retry_count += 1
                     continue
                 
                 with open(HID_PATH, "wb", buffering=0) as hid:
@@ -682,10 +678,14 @@ if EVDEV_AVAILABLE:
                                             hid_code = mapping.get('hid_code')
                                             modifiers = mapping.get('modifiers', 0)  # Get modifiers, default 0
                                             if hid_code:
-                                                ks.mod = modifiers  # Set modifiers before pressing
+                                                # Save current modifier state, then set mapping modifiers
+                                                old_mod = ks.mod
+                                                ks.mod = modifiers  # Set modifiers from mapping
                                                 ks.press(hid_code)
                                                 hid.write(ks.report())
                                                 hid.flush()
+                                                # Restore original modifier state after sending mapped key
+                                                ks.mod = old_mod
                                         elif mapping.get('type') == 'text':
                                             # User mapped to text string - send it as keystrokes
                                             text = mapping.get('text', '')
@@ -700,15 +700,16 @@ if EVDEV_AVAILABLE:
                                     elif val == 0:  # Key up
                                         if mapping.get('type') == 'hid':
                                             hid_code = mapping.get('hid_code')
-                                            modifiers = mapping.get('modifiers', 0)
                                             if hid_code:
-                                                ks.mod = modifiers  # Keep modifiers during release
+                                                # Save current modifier state before release
+                                                old_mod = ks.mod
+                                                # Clear modifiers for release (HID protocol: release keys without modifiers)
+                                                ks.mod = 0
                                                 ks.release(hid_code)
-                                                # Clear modifiers after release
-                                                if not ks.keys:  # Only clear if no other keys pressed
-                                                    ks.mod = 0
                                                 hid.write(ks.report())
                                                 hid.flush()
+                                                # Restore original modifier state after releasing mapped key
+                                                ks.mod = old_mod
                                     continue
                                 
                                 # Regular keys
@@ -739,17 +740,13 @@ if EVDEV_AVAILABLE:
                 break
                 
             except (OSError, IOError) as e:
-                # Device error - might be temporary
+                # Device error - might be temporary, keep retrying while enabled
                 errno = getattr(e, 'errno', None)
                 if errno == 19:  # No such device
                     print(f"⚠️  HID device temporarily unavailable: {e}, retrying...", flush=True)
                 else:
                     print(f"⚠️  Pass-through I/O error: {e}, retrying...", flush=True)
-                retry_count += 1
                 time.sleep(2)
-                if retry_count >= max_retries:
-                    print(f"❌ Pass-through failed after {max_retries} retries", flush=True)
-                    break
                 continue
             except Exception as e:
                 print(f"❌ Pass-through error: {e}", flush=True)
@@ -802,22 +799,30 @@ if EVDEV_AVAILABLE:
         # Track button state and position (for calibration)
         buttons_state = 0  # Bit 0=left, 1=right, 2=middle
         
-        try:
-            with open(HID_MOUSE_PATH, "wb", buffering=0) as hid_mouse:
-                while MOUSE_PASSTHROUGH_ENABLED:
-                    # Monitor all mouse file descriptors
-                    fds = [m.fd for m in mice]
-                    r, _, _ = select.select(fds, [], [], 0.5)
-                    if not r:
-                        continue
-                    
-                    # Process events from whichever mouse has data
-                    for fd in r:
-                        dev = mouse_map[fd]
+        # Retry loop for device availability - keep retrying forever while enabled
+        while MOUSE_PASSTHROUGH_ENABLED:
+            try:
+                # Check if HID mouse device exists before opening
+                if not os.path.exists(HID_MOUSE_PATH):
+                    print(f"⚠️  {HID_MOUSE_PATH} not available, waiting...", flush=True)
+                    time.sleep(2)
+                    continue
+                
+                with open(HID_MOUSE_PATH, "wb", buffering=0) as hid_mouse:
+                    while MOUSE_PASSTHROUGH_ENABLED:
+                        # Monitor all mouse file descriptors
+                        fds = [m.fd for m in mice]
+                        r, _, _ = select.select(fds, [], [], 0.001)
+                        if not r:
+                            continue
                         
-                        for ev in dev.read():
-                            if not MOUSE_PASSTHROUGH_ENABLED:
-                                break
+                        # Process events from whichever mouse has data
+                        for fd in r:
+                            dev = mouse_map[fd]
+                            
+                            for ev in dev.read():
+                                if not MOUSE_PASSTHROUGH_ENABLED:
+                                    break
                             
                             # Handle button events
                             if ev.type == ecodes.EV_KEY:
@@ -880,11 +885,32 @@ if EVDEV_AVAILABLE:
                                 report = bytes([buttons_state, dx_byte, dy_byte, wheel_byte])
                                 hid_mouse.write(report)
                                 hid_mouse.flush()
+                
+                # If we exit the with block normally, break the retry loop
+                break
+                
+            except (OSError, IOError) as e:
+                # Device error - might be temporary, keep retrying while enabled
+                errno = getattr(e, 'errno', None)
+                if errno == 19:  # No such device
+                    print(f"⚠️  HID mouse device temporarily unavailable: {e}, retrying...", flush=True)
+                else:
+                    print(f"⚠️  Mouse pass-through I/O error: {e}, retrying...", flush=True)
+                time.sleep(2)
+                continue
+            except Exception as e:
+                print(f"❌ Mouse pass-through error: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+                break
         
-        except Exception as e:
-            print(f"❌ Mouse pass-through error: {e}")
-        finally:
-            print("⏹️  Mouse pass-through mode STOPPED")
+        # If still enabled, restart the loop
+        if MOUSE_PASSTHROUGH_ENABLED:
+            print("🔄 Restarting mouse pass-through loop...", flush=True)
+            time.sleep(2)
+            return mouse_pass_through_loop()
+        
+        print("⏹️  Mouse pass-through mode STOPPED", flush=True)
 
     # LED forwarding function - reads LED state from host and forwards to physical keyboards
     def led_forwarding_loop():
@@ -2043,30 +2069,34 @@ def main():
     global PASSTHROUGH_ENABLED, passthrough_thread, MOUSE_PASSTHROUGH_ENABLED, mouse_passthrough_thread
     global LED_FORWARDING_ENABLED, led_forwarding_thread
     
+    # CRITICAL: Always enable pass-through flags FIRST, before starting threads
+    # This ensures the API endpoints return the correct state even if threads fail to start
+    if EVDEV_AVAILABLE:
+        PASSTHROUGH_ENABLED = True
+        MOUSE_PASSTHROUGH_ENABLED = True
+        LED_FORWARDING_ENABLED = True
+    
     # Auto-start pass-through modes on boot (always enabled regardless of previous state)
     if EVDEV_AVAILABLE:
         # Start keyboard pass-through
-        print("🎹 Auto-starting keyboard pass-through mode...")
-        PASSTHROUGH_ENABLED = True
+        print("🎹 Auto-starting keyboard pass-through mode...", flush=True)
         passthrough_thread = threading.Thread(target=pass_through_loop, daemon=True)
         passthrough_thread.start()
-        print("✅ Keyboard pass-through mode active - physical keyboard ready!")
+        print("✅ Keyboard pass-through mode active - physical keyboard ready!", flush=True)
         
         # Start LED forwarding (forwards host LED state to physical keyboards)
-        print("💡 Auto-starting LED forwarding...")
-        LED_FORWARDING_ENABLED = True
+        print("💡 Auto-starting LED forwarding...", flush=True)
         led_forwarding_thread = threading.Thread(target=led_forwarding_loop, daemon=True)
         led_forwarding_thread.start()
-        print("✅ LED forwarding active - host LED state will sync to physical keyboards!")
+        print("✅ LED forwarding active - host LED state will sync to physical keyboards!", flush=True)
         
         # Start mouse pass-through
-        print("🖱️  Auto-starting mouse pass-through mode...")
-        MOUSE_PASSTHROUGH_ENABLED = True
+        print("🖱️  Auto-starting mouse pass-through mode...", flush=True)
         mouse_passthrough_thread = threading.Thread(target=mouse_pass_through_loop, daemon=True)
         mouse_passthrough_thread.start()
-        print("✅ Mouse pass-through mode active - physical mouse ready!")
+        print("✅ Mouse pass-through mode active - physical mouse ready!", flush=True)
     
-    print(f"🌐 Starting Keybird web server on http://0.0.0.0:8080")
+    print(f"🌐 Starting Keybird web server on http://0.0.0.0:8080", flush=True)
     app.run(host="0.0.0.0", port=8080, debug=False)
 
 if __name__ == "__main__":
