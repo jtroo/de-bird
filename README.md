@@ -1,4 +1,4 @@
-# Keybird v1.0.10
+# Keybird v1.0.11
 
 **Transform your Raspberry Pi into a professional USB keyboard, mouse, and media controller with web-based management.**
 
@@ -784,6 +784,7 @@ cd keybird/manual-deploy
 
 ## 🚀 Version History
 
+- **v1.0.11** (Dec 2025) - **Pass-Through Reliability & Key Mapping Fixes**: Fixed pass-through always enabled on boot (flags set before threads start, removed retry limits), fixed key mapping modifier handling to preserve user modifier state, improved mouse polling rate (1ms timeout), fixed indentation error in mouse pass-through loop
 - **v1.0.10** (Dec 2025) - **Auto-Start & UI Fixes**: Pass-through modes (keyboard and mouse) now auto-start on boot by default, UI toggles correctly reflect enabled state, restored missing LED indicators and controls on Control tab
 - **v1.0.9** (Nov 2025) - **Human-Readable HID Code Dropdown**: Added dropdown with human-readable key names (Delete, Enter, F1-F24, etc.) instead of requiring hex codes, with Custom option for unknown keys
 - **v1.0.8** (Nov 2025) - **Revert to File-Copying Deployment**: Restored original deployment approach for better workflow (edit locally, deploy to multiple Pis)
