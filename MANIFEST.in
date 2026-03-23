@@ -4,8 +4,6 @@ include LICENSE
 include docs/UNINSTALL.md
 
 # Include package data
-recursive-include keybird/templates *.html
-recursive-include keybird/static *.css *.js *.png *.ico *.json *.xml
 recursive-include keybird/scripts *.sh *.conf
 recursive-include keybird/systemd *.service
 
