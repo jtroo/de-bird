@@ -1,7 +1,6 @@
 # Include essential documentation
 include README.md
 include LICENSE
-include docs/UNINSTALL.md
 
 # Include package data
 recursive-include keybird/scripts *.sh *.conf
