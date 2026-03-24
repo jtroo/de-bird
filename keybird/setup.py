@@ -16,7 +16,7 @@ def check_privileges():
     """Ensure script is run with sudo/root"""
     if os.geteuid() != 0:
         print("❌ Error: This script must be run with sudo")
-        print("   Usage: sudo keybird-setup")
+        print("   Usage: sudo python3 setup.py")
         sys.exit(1)
 
 def check_raspberry_pi():
@@ -49,11 +49,11 @@ def install_files():
     package_dir = Path(__file__).parent
 
     # Create installation directory
-    install_dir = Path('/opt/keybird')
+    install_dir = Path('/opt/de-bird')
     install_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy scripts
-    print("📁 Installing scripts to /opt/keybird/scripts...")
+    print("📁 Installing scripts to /opt/de-bird/scripts...")
     scripts_src = package_dir / 'scripts'
     scripts_dst = install_dir / 'scripts'
     if scripts_src.exists():
@@ -85,11 +85,6 @@ def update_systemd_paths(install_dir):
         if os.path.exists(service):
             with open(service, 'r') as f:
                 content = f.read()
-
-            # Update paths
-            content = content.replace('/opt/de-bird/pi-hid-bridge', '/opt/keybird')
-            content = content.replace('/usr/bin/python3 /opt/de-bird/pi-hid-bridge/app/pi_kb.py',
-                                    '/usr/local/bin/keybird-server')
 
             with open(service, 'w') as f:
                 f.write(content)
@@ -146,7 +141,7 @@ def configure_boot():
 
 def setup_usb_gadget():
     """Run the USB gadget setup script"""
-    script = Path('/opt/keybird/scripts/setup_gadget_composite.sh')
+    script = Path('/opt/de-bird/scripts/setup_gadget_composite.sh')
     if script.exists():
         print("🔌 Setting up USB HID composite gadget...")
         subprocess.run(['bash', str(script)], check=True)

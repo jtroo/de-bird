@@ -28,7 +28,7 @@ def confirm_uninstall():
     print("   The following will be removed:")
     print("   - USB gadget configuration (boot files)")
     print("   - Systemd services")
-    print("   - Installed scripts in /opt/keybird/")
+    print("   - Installed scripts in /opt/de-bird/")
     print("   - HID device setup")
     print()
     print("   Your saved profiles and mappings will be kept:")
@@ -77,7 +77,7 @@ def cleanup_usb_gadget():
     """Remove USB gadget configuration"""
     print("🔌 Cleaning up USB gadget...")
 
-    cleanup_script = '/opt/keybird/scripts/cleanup_gadget.sh'
+    cleanup_script = '/opt/de-bird/scripts/cleanup_gadget.sh'
     if os.path.exists(cleanup_script):
         try:
             subprocess.run(['bash', cleanup_script], check=False,
@@ -133,14 +133,14 @@ def remove_boot_config():
                 print(f"   ⚠️  Could not modify {cmdline_path}: {e}")
 
 def remove_installed_files():
-    """Remove installed files from /opt/keybird/"""
+    """Remove installed files from /opt/de-bird/"""
     print("📁 Removing installed files...")
 
-    install_dir = Path('/opt/keybird')
+    install_dir = Path('/opt/de-bird')
     if install_dir.exists():
         import shutil
         shutil.rmtree(install_dir)
-        print("   ✓ Removed /opt/keybird/")
+        print("   ✓ Removed /opt/de-bird/")
 
 def main():
     """Main uninstall function"""
