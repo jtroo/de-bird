@@ -3,8 +3,8 @@ include README.md
 include LICENSE
 
 # Include package data
-recursive-include keybird/scripts *.sh *.conf
-recursive-include keybird/systemd *.service
+recursive-include de-bird/scripts *.sh *.conf
+recursive-include de-bird/systemd *.service
 
 # Exclude development files
 global-exclude *.pyc

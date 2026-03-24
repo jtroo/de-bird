@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Keybird Uninstall - Clean removal of system configuration
+De-bird Uninstall - Clean removal of system configuration
 
-This script removes all system-level changes made by keybird-setup:
+This script removes all system-level changes made by de-bird-setup:
 - USB gadget configuration
 - Systemd services
 - Boot configuration changes
@@ -18,12 +18,12 @@ def check_privileges():
     """Ensure script is run with sudo/root"""
     if os.geteuid() != 0:
         print("❌ Error: This script must be run with sudo")
-        print("   Usage: sudo keybird-uninstall")
+        print("   Usage: sudo python3 uninstall.py")
         sys.exit(1)
 
 def confirm_uninstall():
     """Ask user to confirm uninstall"""
-    print("⚠️  WARNING: This will remove all Keybird system configuration")
+    print("⚠️  WARNING: This will remove all De-bird system configuration")
     print()
     print("   The following will be removed:")
     print("   - USB gadget configuration (boot files)")
@@ -144,7 +144,7 @@ def remove_installed_files():
 
 def main():
     """Main uninstall function"""
-    print("🗑️  Keybird Uninstall")
+    print("🗑️  De-bird Uninstall")
     print("=" * 60)
     print()
 
@@ -160,12 +160,12 @@ def main():
 
     print()
     print("=" * 60)
-    print("✅ Keybird system configuration removed!")
+    print("✅ De-bird system configuration removed!")
     print()
     print("📋 To complete uninstall:")
     print()
     print("   1. Uninstall Python package:")
-    print("      sudo pip uninstall keybird")
+    print("      sudo pip uninstall de-bird")
     print()
     print("   2. (Optional) Remove saved data:")
     print("      rm /opt/de-bird/keyboard_profiles.json")

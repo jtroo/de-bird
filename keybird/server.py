@@ -1101,10 +1101,11 @@ calibration_state = {
     'current_x': 0,
     'current_y': 0
 }
+
 calibration_lock = threading.Lock()
 
 def main():
-    """Entry point for keybird-server command"""
+    """Entry point for de-bird-server command"""
     global PASSTHROUGH_ENABLED, passthrough_thread, MOUSE_PASSTHROUGH_ENABLED, mouse_passthrough_thread
     global LED_FORWARDING_ENABLED, led_forwarding_thread
 

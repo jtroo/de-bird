@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Keybird Setup - One-time system configuration for Raspberry Pi
+De-bird Setup - One-time system configuration for Raspberry Pi
 
 This script configures your Raspberry Pi for USB gadget mode and installs
 the necessary systemd services.
@@ -23,7 +23,7 @@ def check_raspberry_pi():
     """Verify we're running on a Raspberry Pi with USB gadget support"""
     if not os.path.exists('/sys/class/udc'):
         print("❌ Error: USB gadget mode not available")
-        print("   Keybird requires a Raspberry Pi with USB gadget support:")
+        print("   De-bird requires a Raspberry Pi with USB gadget support:")
         print("   - Pi 4 Model B ✅")
         print("   - Pi Zero 2 W ✅")
         print("   - Pi 3 Model B ✅")
@@ -157,7 +157,7 @@ def enable_services():
 
 def main():
     """Main setup function"""
-    print("🎹 Keybird Setup - Raspberry Pi USB HID Bridge")
+    print("🎹 De-bird Setup - Raspberry Pi USB HID Bridge")
     print("=" * 60)
     print()
 
@@ -177,7 +177,7 @@ def main():
 
     print()
     print("=" * 60)
-    print("✅ Keybird setup complete!")
+    print("✅ De-bird setup complete!")
     print()
     print("📋 Next steps:")
     print("   1. Reboot the Pi:")
