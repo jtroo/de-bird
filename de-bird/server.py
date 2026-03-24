@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 # Pi Keyboard Bridge - Text to HID + Pass-through + Learning Mode
 
-import time
-import os
-import threading
-import select
-import json
-from collections import deque
-
 import glob
+import json
+import os
+import select
+import threading
+import time
 
 # Try to import evdev for pass-through (optional)
 try:
@@ -24,9 +22,6 @@ HID_MOUSE_PATH = "/dev/hidg2"
 PROFILES_FILE = "/opt/de-bird/keyboard_profiles.json"
 MAPPINGS_FILE = "/opt/de-bird/keyboard_mappings.json"
 CALIBRATIONS_FILE = "/opt/de-bird/trackpad_calibrations.json"
-
-# Learning mode - stores recent unmapped keys for UI display
-unmapped_keys_buffer = deque(maxlen=50)  # Last 50 unmapped keys
 
 # ===== EMULATION PROFILES (VID/PID only) =====
 def load_emulation_profiles():
@@ -94,11 +89,6 @@ def save_keyboard_mappings(data):
 
 keyboard_mappings = load_keyboard_mappings()
 active_physical_keyboard_id = None  # Will be set when pass-through starts
-
-# ===== KEY LISTENING MODE (for mapping) =====
-listening_keyboard_id = None  # Which keyboard we're listening to for mapping
-listening_lock = threading.Lock()  # Lock for listening state
-captured_key_buffer = deque(maxlen=10)  # Store captured keys for mapping
 
 # ===== TRACKPAD CALIBRATIONS =====
 def load_calibrations():
@@ -203,144 +193,6 @@ current_led_state = {
     'scroll_lock': False,
     'raw': 0
 }
-
-def detect_mice():
-    """Detect all physical mice plugged into the Pi"""
-    if not EVDEV_AVAILABLE:
-        return []
-
-    mice = []
-    for path in glob.glob("/dev/input/event*"):
-        try:
-            dev = InputDevice(path)
-            caps = dev.capabilities()
-
-            # Check if it's a mouse (has relative X/Y movement)
-            rel_caps = caps.get(ecodes.EV_REL, [])
-            if ecodes.REL_X in rel_caps and ecodes.REL_Y in rel_caps:
-                # Filter out HDMI and other non-mouse devices
-                if 'hdmi' in dev.name.lower() or 'vc4' in dev.name.lower():
-                    continue
-                # Get USB device info if available
-                vid = None
-                pid = None
-
-                # Try to extract VID/PID from sysfs (same method as keyboard)
-                try:
-                    sysfs_path = dev.path.replace('/dev/input/', '/sys/class/input/')
-                    device_path = os.path.realpath(f"{sysfs_path}/device")
-
-                    current = device_path
-                    for _ in range(10):
-                        vid_path = os.path.join(current, "idVendor")
-                        pid_path = os.path.join(current, "idProduct")
-
-                        if os.path.exists(vid_path) and os.path.exists(pid_path):
-                            with open(vid_path, 'r') as f:
-                                vid = f.read().strip()
-                            with open(pid_path, 'r') as f:
-                                pid = f.read().strip()
-                            break
-
-                        parent = os.path.dirname(current)
-                        if parent == current:
-                            break
-                        current = parent
-                except:
-                    pass
-
-                mice.append({
-                    'name': dev.name,
-                    'path': dev.path,
-                    'vid': vid,
-                    'pid': pid,
-                    'phys': dev.phys,
-                    'uniq': dev.uniq,
-                })
-        except Exception:
-            continue
-
-    return mice
-
-
-def detect_keyboards():
-    """Detect all physical keyboards plugged into the Pi"""
-    if not EVDEV_AVAILABLE:
-        return []
-
-    keyboards = []
-    for path in glob.glob("/dev/input/event*"):
-        try:
-            dev = InputDevice(path)
-            caps = dev.capabilities().get(ecodes.EV_KEY, [])
-
-            # Check if it's a keyboard (has letters and Enter)
-            if ecodes.KEY_A in caps and ecodes.KEY_ENTER in caps:
-                # Get USB device info if available
-                vid = None
-                pid = None
-
-                # Try to extract VID/PID from sysfs
-                try:
-                    # Method 1: Walk up from /sys/class/input/eventX
-                    sysfs_path = dev.path.replace('/dev/input/', '/sys/class/input/')
-                    device_path = os.path.realpath(f"{sysfs_path}/device")
-
-                    # Look for idVendor/idProduct in parent directories
-                    current = device_path
-                    for _ in range(10):  # Search up to 10 levels
-                        vid_path = os.path.join(current, "idVendor")
-                        pid_path = os.path.join(current, "idProduct")
-
-                        if os.path.exists(vid_path) and os.path.exists(pid_path):
-                            with open(vid_path, 'r') as f:
-                                vid = f.read().strip()
-                            with open(pid_path, 'r') as f:
-                                pid = f.read().strip()
-                            break
-
-                        # Stop at root
-                        parent = os.path.dirname(current)
-                        if parent == current:
-                            break
-                        current = parent
-
-                    # Method 2: Try using device info from evdev
-                    if not vid or not pid:
-                        # Parse from device physical address (e.g., "usb-0000:01:00.0-1.3/input0")
-                        if dev.phys and 'usb' in dev.phys.lower():
-                            # Try to find in /sys/bus/usb/devices
-                            for usb_dev in glob.glob("/sys/bus/usb/devices/*"):
-                                try:
-                                    with open(f"{usb_dev}/idVendor", 'r') as f:
-                                        test_vid = f.read().strip()
-                                    with open(f"{usb_dev}/idProduct", 'r') as f:
-                                        test_pid = f.read().strip()
-                                    with open(f"{usb_dev}/product", 'r') as f:
-                                        product_name = f.read().strip()
-
-                                    # Check if this matches our device name
-                                    if dev.name in product_name or product_name in dev.name:
-                                        vid = test_vid
-                                        pid = test_pid
-                                        break
-                                except:
-                                    continue
-                except:
-                    pass
-
-                keyboards.append({
-                    'name': dev.name,
-                    'path': dev.path,
-                    'vid': vid,
-                    'pid': pid,
-                    'phys': dev.phys,
-                    'uniq': dev.uniq,
-                })
-        except Exception as e:
-            continue
-
-    return keyboards
 
 if EVDEV_AVAILABLE:
     # Complete keyboard mapping (Linux evdev → USB HID Usage codes)
@@ -489,7 +341,7 @@ if EVDEV_AVAILABLE:
             arr = [self.mod, 0] + self.keys[:6] + [0]*(6-len(self.keys))
             return bytes(arr)
 
-    def pass_through_loop():
+    def pass_through_loop(device_glob):
         global PASSTHROUGH_ENABLED, active_physical_keyboard_id
         # Find ALL keyboard devices
         keyboards = []
@@ -498,7 +350,7 @@ if EVDEV_AVAILABLE:
         # First pass: collect all keyboard devices and group by uniq ID
         keyboard_devices = {}  # uniq -> list of (device, path, name)
 
-        event_paths = sorted(glob.glob("/dev/input/event*"))
+        event_paths = sorted(glob.glob(device_glob))
 
         for path in event_paths:
             try:
@@ -560,7 +412,7 @@ if EVDEV_AVAILABLE:
             print("⚠️  No keyboards found for pass-through; waiting...", flush=True)
             time.sleep(3)
             if PASSTHROUGH_ENABLED:
-                return pass_through_loop()
+                return pass_through_loop(device_glob)
             return
 
         ks = KeyState()
@@ -598,10 +450,6 @@ if EVDEV_AVAILABLE:
                                 code = kev.scancode
                                 val = kev.keystate  # 0=up,1=down,2=hold
 
-                                # Check if we're in listening mode for this keyboard
-                                with listening_lock:
-                                    is_listening = (listening_keyboard_id == kbd_id)
-
                                 # Handle modifier keys
                                 if code in MOD_KEYS:
                                     bit = MOD_KEYS[code]
@@ -610,36 +458,8 @@ if EVDEV_AVAILABLE:
                                     else:
                                         ks.mod &= ~bit
 
-                                    # If listening, suppress modifier keys but still track state
-                                    if is_listening:
-                                        # Still track modifier state for combinations, but don't send
-                                        continue
-
                                     hid.write(ks.report())
                                     hid.flush()
-                                    continue
-
-                                # If listening mode is active for this keyboard, capture the key
-                                if is_listening and val == 1:  # Only capture on key down
-                                    key_name = ecodes.KEY.get(code, f"KEY_{code}")
-                                    mod_names = []
-                                    if ks.mod & 1: mod_names.append('Ctrl')
-                                    if ks.mod & 2: mod_names.append('Shift')
-                                    if ks.mod & 4: mod_names.append('Alt')
-                                    if ks.mod & 8: mod_names.append('Meta')
-                                    mod_string = '+'.join(mod_names) if mod_names else ''
-                                    full_name = f"{mod_string}+{key_name}" if mod_string else key_name
-
-                                    with listening_lock:
-                                        captured_key_buffer.append({
-                                            'code': code,
-                                            'name': full_name,
-                                            'key_name': key_name,
-                                            'keyboard_id': kbd_id,
-                                            'modifiers': ks.mod,
-                                            'timestamp': time.time()
-                                        })
-                                    # Don't pass through the key when capturing - suppress it
                                     continue
 
                                 # Check if it's a media key
@@ -713,13 +533,6 @@ if EVDEV_AVAILABLE:
                                     # Log unmapped keys to buffer for UI display (with keyboard ID)
                                     if val == 1:  # Only on key down
                                         key_name = ecodes.KEY.get(code, f"UNKNOWN_{code}")
-                                        unmapped_keys_buffer.append({
-                                            'code': code,
-                                            'name': key_name,
-                                            'timestamp': time.time(),
-                                            'keyboard_id': active_physical_keyboard_id,
-                                            'keyboard_name': keyboard_mappings.get(active_physical_keyboard_id, {}).get('keyboard_name', 'Unknown')
-                                        })
                                         print(f"⚠️  Unmapped key: {key_name} (code={code}) on {keyboard_mappings.get(active_physical_keyboard_id, {}).get('keyboard_name', 'Unknown')}")
                                     continue
 
@@ -753,18 +566,18 @@ if EVDEV_AVAILABLE:
         if PASSTHROUGH_ENABLED:
             print("🔄 Restarting pass-through loop...", flush=True)
             time.sleep(2)
-            return pass_through_loop()
+            return pass_through_loop(device_glob)
 
         print("⏹️  Pass-through mode STOPPED", flush=True)
 
     # Mouse pass-through function
-    def mouse_pass_through_loop():
+    def mouse_pass_through_loop(device_glob):
         global MOUSE_PASSTHROUGH_ENABLED, calibration_state
         # Find ALL mouse devices
         mice = []
         mouse_map = {}  # Map fd -> device
 
-        for path in glob.glob("/dev/input/event*"):
+        for path in glob.glob(device_glob):
             try:
                 cand = InputDevice(path)
                 caps = cand.capabilities()
@@ -786,7 +599,7 @@ if EVDEV_AVAILABLE:
             print("⚠️  No mice found for pass-through; waiting...")
             time.sleep(3)
             if MOUSE_PASSTHROUGH_ENABLED:
-                return mouse_pass_through_loop()
+                return mouse_pass_through_loop(device_glob)
             return
 
         print(f"✅ Mouse pass-through ACTIVE - monitoring {len(mice)} mouse/mice", flush=True)
@@ -929,7 +742,7 @@ if EVDEV_AVAILABLE:
         if MOUSE_PASSTHROUGH_ENABLED:
             print("🔄 Restarting mouse pass-through loop...", flush=True)
             time.sleep(2)
-            return mouse_pass_through_loop()
+            return mouse_pass_through_loop(device_glob)
 
         print("⏹️  Mouse pass-through mode STOPPED", flush=True)
 
@@ -1109,6 +922,9 @@ def main():
     global PASSTHROUGH_ENABLED, passthrough_thread, MOUSE_PASSTHROUGH_ENABLED, mouse_passthrough_thread
     global LED_FORWARDING_ENABLED, led_forwarding_thread
 
+    kanata_dev_symlink_path = "/opt/kanata/kanata-evdev-device"
+    kanata_dev_real_path = os.path.realpath(kanata_dev_symlink_path)
+
     # CRITICAL: Always enable pass-through flags FIRST, before starting threads
     # This ensures the API endpoints return the correct state even if threads fail to start
     if EVDEV_AVAILABLE:
@@ -1126,13 +942,13 @@ def main():
 
         # Start mouse pass-through
         print("Starting mouse pass-through mode...", flush=True)
-        mouse_passthrough_thread = threading.Thread(target=mouse_pass_through_loop, daemon=True)
+        mouse_passthrough_thread = threading.Thread(target=mouse_pass_through_loop, daemon=True, args=[kanata_dev_real_path])
         mouse_passthrough_thread.start()
         print("Mouse pass-through mode active - physical mouse ready!", flush=True)
 
         # Start keyboard pass-through
         print("Starting keyboard pass-through mode...", flush=True)
-        pass_through_loop()
+        pass_through_loop(kanata_dev_real_path)
 
     else:
         print("evdev not available, functionality does not work", flush=True)
