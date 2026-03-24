@@ -7,8 +7,8 @@ Before=pi-hid-bridge.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/bash /home/pi/pi-hid-bridge/scripts/setup_gadget_composite.sh
-ExecStop=/bin/bash /home/pi/pi-hid-bridge/scripts/cleanup_gadget.sh
+ExecStart=/bin/bash /opt/de-bird/pi-hid-bridge/scripts/setup_gadget_composite.sh
+ExecStop=/bin/bash /opt/de-bird/pi-hid-bridge/scripts/cleanup_gadget.sh
 
 [Install]
 WantedBy=multi-user.target

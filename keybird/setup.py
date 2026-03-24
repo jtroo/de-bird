@@ -29,7 +29,7 @@ def check_raspberry_pi():
         print("   - Pi 3 Model B ✅")
         print("   - Pi 5 ❌ (USB gadget broken)")
         sys.exit(1)
-    
+
     # Check for Pi 5
     try:
         with open('/proc/device-tree/model', 'r') as f:
@@ -47,11 +47,11 @@ def check_raspberry_pi():
 def install_files():
     """Copy scripts and systemd services to system locations"""
     package_dir = Path(__file__).parent
-    
+
     # Create installation directory
     install_dir = Path('/opt/keybird')
     install_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Copy scripts
     print("📁 Installing scripts to /opt/keybird/scripts...")
     scripts_src = package_dir / 'scripts'
@@ -61,16 +61,16 @@ def install_files():
         # Make executable
         for script in scripts_dst.glob('*.sh'):
             script.chmod(0o755)
-    
+
     # Install systemd services
     print("🔧 Installing systemd services...")
     systemd_src = package_dir / 'systemd'
     systemd_dst = Path('/etc/systemd/system')
-    
+
     if systemd_src.exists():
         for service_file in systemd_src.glob('*.service'):
             shutil.copy2(service_file, systemd_dst / service_file.name)
-    
+
     # Update service file paths to use installed Python
     update_systemd_paths(install_dir)
 
@@ -80,24 +80,24 @@ def update_systemd_paths(install_dir):
         '/etc/systemd/system/hid-gadget.service',
         '/etc/systemd/system/pi-hid-bridge.service'
     ]
-    
+
     for service in services:
         if os.path.exists(service):
             with open(service, 'r') as f:
                 content = f.read()
-            
+
             # Update paths
-            content = content.replace('/home/pi/pi-hid-bridge', '/opt/keybird')
-            content = content.replace('/usr/bin/python3 /home/pi/pi-hid-bridge/app/pi_kb.py', 
+            content = content.replace('/opt/de-bird/pi-hid-bridge', '/opt/keybird')
+            content = content.replace('/usr/bin/python3 /opt/de-bird/pi-hid-bridge/app/pi_kb.py',
                                     '/usr/local/bin/keybird-server')
-            
+
             with open(service, 'w') as f:
                 f.write(content)
 
 def configure_boot():
     """Configure boot files for USB gadget mode"""
     print("⚙️  Configuring USB gadget mode in boot config...")
-    
+
     # Find config.txt location (varies by Pi OS version)
     config_paths = ['/boot/firmware/config.txt', '/boot/config.txt']
     config_txt = None
@@ -105,25 +105,25 @@ def configure_boot():
         if os.path.exists(path):
             config_txt = path
             break
-    
+
     if not config_txt:
         print("⚠️  Warning: Could not find config.txt")
         return
-    
+
     # Backup config.txt
     subprocess.run(['cp', config_txt, f'{config_txt}.backup'], check=False)
-    
+
     # Check if dwc2 overlay already exists
     with open(config_txt, 'r') as f:
         content = f.read()
-    
+
     if 'dtoverlay=dwc2' not in content:
         print("   Adding dwc2 overlay to config.txt...")
         with open(config_txt, 'a') as f:
             f.write('\ndtoverlay=dwc2,dr_mode=peripheral\n')
     else:
         print("   ✓ dwc2 overlay already configured")
-    
+
     # Configure cmdline.txt
     cmdline_paths = ['/boot/firmware/cmdline.txt', '/boot/cmdline.txt']
     cmdline_txt = None
@@ -131,11 +131,11 @@ def configure_boot():
         if os.path.exists(path):
             cmdline_txt = path
             break
-    
+
     if cmdline_txt:
         with open(cmdline_txt, 'r') as f:
             cmdline = f.read()
-        
+
         if 'modules-load=dwc2' not in cmdline:
             print("   Adding modules-load to cmdline.txt...")
             cmdline = cmdline.replace('rootwait', 'rootwait modules-load=dwc2')
@@ -165,21 +165,21 @@ def main():
     print("🎹 Keybird Setup - Raspberry Pi USB HID Bridge")
     print("=" * 60)
     print()
-    
+
     check_privileges()
     check_raspberry_pi()
-    
+
     install_files()
     configure_boot()
-    
+
     try:
         setup_usb_gadget()
     except Exception as e:
         print(f"⚠️  Warning: Could not setup USB gadget: {e}")
         print("   You may need to reboot first")
-    
+
     enable_services()
-    
+
     print()
     print("=" * 60)
     print("✅ Keybird setup complete!")
@@ -192,9 +192,6 @@ def main():
     print("      Check status: systemctl status pi-hid-bridge")
     print()
     print("   3. Connect USB-C cable to target computer")
-    print()
-    print("   4. Access web UI:")
-    print("      http://<pi-ip>:8080")
     print()
 
 if __name__ == '__main__':

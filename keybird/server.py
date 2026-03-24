@@ -21,9 +21,9 @@ except ImportError:
 HID_PATH = "/dev/hidg0"
 HID_MEDIA_PATH = "/dev/hidg1"
 HID_MOUSE_PATH = "/dev/hidg2"
-PROFILES_FILE = "/home/pi/keyboard_profiles.json"
-MAPPINGS_FILE = "/home/pi/keyboard_mappings.json"
-CALIBRATIONS_FILE = "/home/pi/trackpad_calibrations.json"
+PROFILES_FILE = "/opt/de-bird/keyboard_profiles.json"
+MAPPINGS_FILE = "/opt/de-bird/keyboard_mappings.json"
+CALIBRATIONS_FILE = "/opt/de-bird/trackpad_calibrations.json"
 
 # Learning mode - stores recent unmapped keys for UI display
 unmapped_keys_buffer = deque(maxlen=50)  # Last 50 unmapped keys

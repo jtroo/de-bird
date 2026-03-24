@@ -81,7 +81,7 @@ Complete changelog of all releases with dates, commit hashes, and detailed chang
 **Revert to File-Copying Deployment**
 
 - Restored original deployment approach for better workflow
-- Systemd service uses `/home/pi/pi-hid-bridge/pi_kb.py`
+- Systemd service uses `/opt/de-bird/pi-hid-bridge/pi_kb.py`
 - Maintains workflow: edit locally, deploy to multiple Pis
 - No pip install needed on Pi, works with fresh SD cards
 
