@@ -67,6 +67,9 @@ def install_files():
     systemd_src = package_dir / 'systemd'
     systemd_dst = Path('/etc/systemd/system')
 
+    # install server
+    shutil.copy2(install_dir, './server.py')
+
     if systemd_src.exists():
         for service_file in systemd_src.glob('*.service'):
             shutil.copy2(service_file, systemd_dst / service_file.name)

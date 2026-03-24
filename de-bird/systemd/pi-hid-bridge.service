@@ -7,7 +7,7 @@ Requires=hid-gadget.service
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/de-bird/pi-hid-bridge
+WorkingDirectory=/opt/de-bird/
 ExecStart=/usr/bin/python3 /opt/de-bird/server.py
 Restart=always
 RestartSec=3
